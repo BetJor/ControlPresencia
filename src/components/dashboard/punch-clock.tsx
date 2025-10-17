@@ -21,8 +21,9 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { cn } from "@/lib/utils";
 import { Card, CardTitle } from "@/components/ui/card";
 import { useFirestore, useUser, addDocumentNonBlocking, useCollection, useMemoFirebase } from "@/firebase";
-import { collection, serverTimestamp } from "firebase/firestore";
+import { collection, serverTimestamp, setDoc, doc } from "firebase/firestore";
 import { Loader2 } from "lucide-react";
+import type { Employee } from "@/lib/types";
 
 type FavoriteVisitor = {
     id: string;
@@ -63,10 +64,43 @@ export default function PunchClock() {
 
 
   const handleManualPunch = () => {
-    toast({
-      title: 'Fichaje Manual Registrado',
-      description: 'El fichaje manual ha sido registrado con éxito.',
-    });
+    if (!employeeValue || !firestore) {
+        toast({
+            variant: "destructive",
+            title: "Error",
+            description: "Has de seleccionar un empleat.",
+        });
+        return;
+    }
+
+    const selectedEmployee = mockEmployees.find((employee) => employee.id === employeeValue);
+
+    if (selectedEmployee) {
+        const employeeDocRef = doc(firestore, 'usuaris_dins', selectedEmployee.id);
+        const employeeData = {
+            nom: selectedEmployee.firstName,
+            cognoms: selectedEmployee.lastName,
+            horaDarreraEntrada: serverTimestamp(),
+        };
+
+        // We use setDoc here to create or overwrite the document with the employee's ID.
+        // This ensures that if they punch in again, their entry time is updated.
+        setDoc(employeeDocRef, employeeData)
+            .then(() => {
+                toast({
+                    title: 'Entrada Manual Registrada',
+                    description: `S'ha registrat l'entrada per a ${selectedEmployee.firstName} ${selectedEmployee.lastName}.`,
+                });
+                setEmployeeValue(""); // Reset dropdown
+            })
+            .catch((error) => {
+                 toast({
+                    variant: "destructive",
+                    title: "Error en el registre",
+                    description: "No s'ha pogut registrar l'entrada. Intenta-ho de nou.",
+                });
+            });
+    }
   };
 
   const handleVisitorEntry = () => {
@@ -159,7 +193,7 @@ export default function PunchClock() {
                                             disabled={isLoading}
                                         >
                                             {employeeValue
-                                            ? mockEmployees.find((employee) => `${employee.firstName.toLowerCase()} ${employee.lastName.toLowerCase()}` === employeeValue)?.firstName + ' ' + mockEmployees.find((employee) => `${employee.firstName.toLowerCase()} ${employee.lastName.toLowerCase()}` === employeeValue)?.lastName
+                                            ? mockEmployees.find((employee) => employee.id === employeeValue)?.firstName + ' ' + mockEmployees.find((employee) => employee.id === employeeValue)?.lastName
                                             : "Seleccionar empleado..."}
                                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                         </Button>
@@ -169,10 +203,10 @@ export default function PunchClock() {
                                             <CommandInput placeholder="Buscar empleado..." />
                                             <CommandEmpty>No se encontró el empleado.</CommandEmpty>
                                             <CommandGroup>
-                                            {mockEmployees.map((employee) => (
+                                            {mockEmployees.map((employee: Employee) => (
                                                 <CommandItem
                                                 key={employee.id}
-                                                value={`${employee.firstName.toLowerCase()} ${employee.lastName.toLowerCase()}`}
+                                                value={employee.id}
                                                 onSelect={(currentValue) => {
                                                     setEmployeeValue(currentValue === employeeValue ? "" : currentValue)
                                                     setEmployeeOpen(false)
@@ -181,7 +215,7 @@ export default function PunchClock() {
                                                 <Check
                                                     className={cn(
                                                     "mr-2 h-4 w-4",
-                                                    employeeValue === `${employee.firstName.toLowerCase()} ${employee.lastName.toLowerCase()}` ? "opacity-100" : "opacity-0"
+                                                    employeeValue === employee.id ? "opacity-100" : "opacity-0"
                                                     )}
                                                 />
                                                 {employee.firstName} {employee.lastName}
@@ -194,7 +228,7 @@ export default function PunchClock() {
                                 </div>
                                 <div className='grid gap-2'>
                                     <Label>&nbsp;</Label>
-                                    <Button onClick={handleManualPunch} className='w-full' disabled={isLoading}>
+                                    <Button onClick={handleManualPunch} className='w-full' disabled={isLoading || !employeeValue}>
                                         Registrar Entrada
                                     </Button>
                                 </div>
