@@ -56,3 +56,20 @@ export type UsuariDins = {
   cognoms: string;
   horaDarreraEntrada: Timestamp;
 };
+
+export type Directori = {
+  id: string;
+  nom: string;
+  cognom: string;
+  email: string;
+  edifici: string;
+  empresa: string;
+  departament: string;
+  carrec: string;
+  descripcioCarrec: string;
+  telefons: string[];
+  fotoUrl: string;
+  responsable: string;
+  planta: string;
+  centreCost: string;
+};

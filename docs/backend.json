@@ -213,6 +213,38 @@
         "cognoms",
         "horaDarreraEntrada"
       ]
+    },
+    "Directori": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Directori",
+      "type": "object",
+      "description": "Represents an employee in the company directory.",
+      "properties": {
+        "nom": { "type": "string" },
+        "cognom": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "edifici": { "type": "string" },
+        "empresa": { "type": "string" },
+        "departament": { "type": "string" },
+        "carrec": { "type": "string" },
+        "descripcioCarrec": { "type": "string" },
+        "telefons": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "fotoUrl": { "type": "string", "format": "uri" },
+        "responsable": { "type": "string", "format": "email" },
+        "planta": { "type": "string" },
+        "centreCost": { "type": "string" }
+      },
+      "required": [
+        "nom",
+        "cognom",
+        "email",
+        "empresa",
+        "departament",
+        "carrec"
+      ]
     }
   },
   "auth": {
@@ -350,8 +382,24 @@
             }
           ]
         }
+      },
+      {
+        "path": "/directori/{directoriId}",
+        "definition": {
+          "entityName": "Directori",
+          "schema": {
+            "$ref": "#/backend/entities/Directori"
+          },
+          "description": "Stores employee directory information.",
+          "params": [
+            {
+              "name": "directoriId",
+              "description": "The unique identifier for the directory entry (e.g., email)."
+            }
+          ]
+        }
       }
     ],
-    "reasoning": "The Firestore data structure is designed to support the core features of the Clockwork application, emphasizing security, scalability, and debuggability, adhering to the principles of Authorization Independence, Clarity of Intent, DBAC (Database-Based Access Control), and QAPs (Queries are not Filters).  \n\n**Authorization Independence:** Achieved through denormalization. For example, user roles are stored directly in the `users` document to avoid `get()` calls in security rules when accessing user-specific data.\n\n**Structural Segregation:** Different types of data (e.g., user profiles, attendance records, visit registrations, and favorite visitors) are stored in separate collections, each with its own specific security rules.\n\n**Access Modeling:**\n*   User data is stored under `/users/{userId}`, enabling path-based access control.\n*   Attendance records are stored under `/attendance_records/{attendanceRecordId}` with the `employeeId` stored within each record for querying and filtering.\n*   Visit registrations are stored under `/visit_registrations/{visitRegistrationId}` to store data related to registered visits.\n*   Favorite visitors are stored under `/favorite_visitors/{favoriteVisitorId}` to manage a list of recurring or important visitors.\n*   **Whiteboard Collection:** The new `usuaris_dins` collection is a real-time 'whiteboard' of present users. It's designed to be written to by a trusted backend process (Cloud Function) and read by many clients, which is a highly efficient pattern.\n\n**QAPs Support:** The structure enables secure `list` operations. For example, listing attendance records requires checking the user's role or ownership of the employee being queried. Reading the `usuaris_dins` collection will be open to any authenticated user, as it contains non-sensitive presence information.\n\n**Denormalization Strategy:** To ensure Authorization Independence (CRITICAL), the `users` collection stores roles directly in the document. This avoids hierarchical authorization dependencies and enables atomic operations. The `usuaris_dins` collection is itself a form of denormalization for fast reads.\n\nThis structure enables secure and efficient data access while ensuring that security rules are clear, maintainable, and do not rely on complex hierarchical `get()` calls."
+    "reasoning": "The Firestore data structure is designed to support the core features of the Clockwork application, emphasizing security, scalability, and debuggability, adhering to the principles of Authorization Independence, Clarity of Intent, DBAC (Database-Based Access Control), and QAPs (Queries are not Filters).  \n\n**Authorization Independence:** Achieved through denormalization. For example, user roles are stored directly in the `users` document to avoid `get()` calls in security rules when accessing user-specific data.\n\n**Structural Segregation:** Different types of data (e.g., user profiles, attendance records, visit registrations, and favorite visitors) are stored in separate collections, each with its own specific security rules.\n\n**Access Modeling:**\n*   User data is stored under `/users/{userId}`, enabling path-based access control.\n*   Attendance records are stored under `/attendance_records/{attendanceRecordId}` with the `employeeId` stored within each record for querying and filtering.\n*   Visit registrations are stored under `/visit_registrations/{visitRegistrationId}` to store data related to registered visits.\n*   Favorite visitors are stored under `/favorite_visitors/{favoriteVisitorId}` to manage a list of recurring or important visitors.\n*   **Whiteboard Collection:** The new `usuaris_dins` collection is a real-time 'whiteboard' of present users. It's designed to be written to by a trusted backend process (Cloud Function) and read by many clients, which is a highly efficient pattern.\n*   **Directory Collection:** The new `directori` collection stores detailed employee information for a company-wide directory.\n\n**QAPs Support:** The structure enables secure `list` operations. For example, listing attendance records requires checking the user's role or ownership of the employee being queried. Reading the `usuaris_dins` collection will be open to any authenticated user, as it contains non-sensitive presence information.\n\n**Denormalization Strategy:** To ensure Authorization Independence (CRITICAL), the `users` collection stores roles directly in the document. This avoids hierarchical authorization dependencies and enables atomic operations. The `usuaris_dins` collection is itself a form of denormalization for fast reads.\n\nThis structure enables secure and efficient data access while ensuring that security rules are clear, maintainable, and do not rely on complex hierarchical `get()` calls."
   }
 }

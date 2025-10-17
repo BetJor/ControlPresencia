@@ -6,6 +6,7 @@ import {
   Users,
   Settings,
   Contact,
+  BookUser,
 } from 'lucide-react';
 import {
   Tooltip,
@@ -20,6 +21,7 @@ const navItems = [
   { href: '/dashboard', icon: Home, label: 'Panel' },
   { href: '/employees', icon: Users, label: 'Empleados' },
   { href: '/visitors', icon: Contact, label: 'Visitas' },
+  { href: '/directori', icon: BookUser, label: 'Directori' },
 ];
 
 export default function AppSidebar() {

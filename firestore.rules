@@ -2,185 +2,193 @@
  * @fileoverview Firestore Security Rules for Clockwork application.
  *
  * Core Philosophy:
- * This ruleset prioritizes security by enforcing strict access control based on
- * user roles and ownership, while maintaining flexibility for data evolution.
+ * This ruleset prioritizes strong authorization by enforcing strict owner-only
+ * access for user-related data and relies on denormalization for efficient
+ * access control. Data validation is relaxed to facilitate rapid prototyping.
  *
  * Data Structure:
- * - /users/{userId}: Stores user profiles, with 'role' denormalized for
+ * - /users/{userId}: Stores user profiles, with the 'role' field denormalized for
  *   authorization independence.
- * - /attendance_records/{attendanceRecordId}: Stores attendance records,
- *   containing employeeId for filtering.
+ * - /attendance_records/{attendanceRecordId}: Stores attendance records, with
+ *   'employeeId' for filtering.
  * - /terminals/{terminalId}: Stores terminal information.
  * - /incident_types/{incidentTypeId}: Stores incident types.
  * - /employees/{employeeId}: Stores employee information.
- * - /visit_registrations/{visitRegistrationId}: Stores visit registrations.
- * - /favorite_visitors/{favoriteVisitorId}: Stores favorite visitors.
- * - /usuaris_dins/{usuariId}: Stores a real-time list of users currently in the
- *   office, designed for public read access.
+ * - /visit_registrations/{visitRegistrationId}: Stores visit registration data.
+ * - /favorite_visitors/{favoriteVisitorId}: Stores data about favorite visitors.
+ * - /usuaris_dins/{usuariId}: "Whiteboard" collection of users currently in the office;
+ *   written by a trusted backend, read by all authenticated users.
  *
  * Key Security Decisions:
- * - User listing is disabled to protect privacy.
- * - The `usuaris_dins` collection is designed for public read access by
- *   authenticated users, as it contains non-sensitive presence information.
- * - All write operations are protected by authorization checks.
+ * - User data is strictly controlled by the owning user.
+ * - The `usuaris_dins` collection is publicly readable by authenticated users, but
+ *   only writable by a trusted backend (not covered by these rules).
+ * - Data validation is minimal to enable rapid prototyping. Only authorization-critical
+ *   fields are validated.
  *
  * Denormalization for Authorization:
- * - User roles are denormalized into the /users/{userId} document to avoid
- *   costly `get()` calls in security rules.
+ * - User roles are denormalized into the `users` document to avoid extra reads
+ *   during authorization checks.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Allows managing user profiles.
+     * @description Checks if the request is authenticated.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * @description Checks if the request is made by the owner of the resource.
+     */
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    /**
+     * @description Checks if the request is made by the existing owner of the resource, ensuring the document exists.
+     */
+    function isExistingOwner(userId) {
+      return isOwner(userId) && exists(/databases/$(database)/documents/users/$(userId));
+    }
+
+    function getSelf() {
+        return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+
+    /**
+     * @description Defines a named set of users who are admins.
+     */
+    function isAdmin() {
+        return request.auth.uid in ["admin1", "admin2"];
+    }
+
+    /**
+     * @description Rules for the /users/{userId} collection.
      * @path /users/{userId}
-     * @allow (create) User with matching ID can create their own profile.
-     * @allow (get, update, delete) User can read, update, and delete their own profile.
-     * @deny (create) User cannot create a profile with a mismatched ID.
-     * @deny (list) Listing all users is disallowed.
+     * @allow (create) - User with ID 'user123' creates their own profile.
+     * @allow (get, list, update, delete) - User with ID 'user123' reads, updates, or deletes their own profile.
+     * @deny (create) - User with ID 'user456' tries to create a profile for 'user123'.
+     * @deny (update, delete) - User with ID 'user456' tries to update or delete 'user123' profile.
      * @principle Enforces document ownership for writes.
      */
     match /users/{userId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      function isOwner(userId) {
-        return isSignedIn() && request.auth.uid == userId;
-      }
-
-      function isExistingOwner(userId) {
-        return isOwner(userId) && resource != null;
-      }
-
+      // Allow the user to read their own profile
       allow get: if isOwner(userId);
       allow list: if false;
+
+      // Allow the user to create their own profile, validating the user ID in the document.
       allow create: if isOwner(userId) && request.resource.data.id == userId;
+
+      // Allow the user to update their own profile, enforcing immutability of the user ID.
       allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
+
+      // Allow the user to delete their own profile.
       allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Allows managing attendance records.
+     * @description Rules for the /attendance_records/{attendanceRecordId} collection.
      * @path /attendance_records/{attendanceRecordId}
-     * @allow (create) Authenticated user can create attendance records.
-     * @allow (get, list) Any authenticated user can read attendance records.
-     * @deny (update, delete) Only the owner can update or delete attendance records.
-     * @principle Authenticated users can create and read, owner-only updates and deletes.
+     * @allow (create) - Any authenticated user can create an attendance record.
+     * @allow (get, list) - Any authenticated user can read attendance records.
+     * @allow (update, delete) - Only the owner can update/delete. Need to be implemented if ownership is defined for AttendanceRecord.
+     * @deny (update, delete) - If not owner, deny updates/deletes.
+     * @principle Allows public read access but restricts writes to owners (if implemented).
      */
     match /attendance_records/{attendanceRecordId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
       allow get, list: if isSignedIn();
       allow create: if isSignedIn();
-      allow update, delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow update, delete: if false; // TODO: Add owner validation if the schema is updated with an ownership field.
     }
 
     /**
-     * @description Allows managing terminals.
+     * @description Rules for the /terminals/{terminalId} collection.
      * @path /terminals/{terminalId}
-     * @allow (create) Authenticated user can create terminals.
-     * @allow (get, list) Any authenticated user can read terminal information.
-     * @deny (update, delete) Only the owner can update or delete terminals.
-     * @principle Authenticated users can create and read, owner-only updates and deletes.
+     * @allow (create) - Any authenticated user can create a terminal.
+     * @allow (get, list) - Any authenticated user can read terminal data.
+     * @allow (update, delete) - Only the owner can update/delete. Need to be implemented if ownership is defined for Terminal.
+     * @deny (update, delete) - If not owner, deny updates/deletes.
+     * @principle Allows public read access but restricts writes to owners (if implemented).
      */
     match /terminals/{terminalId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
       allow get, list: if isSignedIn();
       allow create: if isSignedIn();
-      allow update, delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow update, delete: if false; // TODO: Add owner validation if the schema is updated with an ownership field.
     }
 
     /**
-     * @description Allows managing incident types.
+     * @description Rules for the /incident_types/{incidentTypeId} collection.
      * @path /incident_types/{incidentTypeId}
-     * @allow (create) Authenticated user can create incident types.
-     * @allow (get, list) Any authenticated user can read incident types.
-     * @deny (update, delete) Only the owner can update or delete incident types.
-     * @principle Authenticated users can create and read, owner-only updates and deletes.
+     * @allow (create) - Any authenticated user can create an incident type.
+     * @allow (get, list) - Any authenticated user can read incident type data.
+     * @allow (update, delete) - Only the owner can update/delete. Need to be implemented if ownership is defined for IncidentType.
+     * @deny (update, delete) - If not owner, deny updates/deletes.
+     * @principle Allows public read access but restricts writes to owners (if implemented).
      */
     match /incident_types/{incidentTypeId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
       allow get, list: if isSignedIn();
       allow create: if isSignedIn();
-      allow update, delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow update, delete: if false; // TODO: Add owner validation if the schema is updated with an ownership field.
     }
 
     /**
-     * @description Allows managing employee information.
+     * @description Rules for the /employees/{employeeId} collection.
      * @path /employees/{employeeId}
-     * @allow (create) Authenticated user can create employee information.
-     * @allow (get, list) Any authenticated user can read employee information.
-     * @deny (update, delete) Only the owner can update or delete employee information.
-     * @principle Authenticated users can create and read, owner-only updates and deletes.
+     * @allow (create) - Any authenticated user can create an employee.
+     * @allow (get, list) - Any authenticated user can read employee data.
+     * @allow (update, delete) - Only the owner can update/delete. Need to be implemented if ownership is defined for Employee.
+     * @deny (update, delete) - If not owner, deny updates/deletes.
+     * @principle Allows public read access but restricts writes to owners (if implemented).
      */
     match /employees/{employeeId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
       allow get, list: if isSignedIn();
       allow create: if isSignedIn();
-      allow update, delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow update, delete: if false; // TODO: Add owner validation if the schema is updated with an ownership field.
     }
 
     /**
-     * @description Allows managing visit registrations.
+     * @description Rules for the /visit_registrations/{visitRegistrationId} collection.
      * @path /visit_registrations/{visitRegistrationId}
-     * @allow (create) Authenticated user can create visit registrations.
-     * @allow (get, list) Any authenticated user can read visit registrations.
-     * @deny (update, delete) Only the owner can update or delete visit registrations.
-     * @principle Authenticated users can create and read, owner-only updates and deletes.
+     * @allow (create) - Any authenticated user can create a visit registration.
+     * @allow (get, list) - Any authenticated user can read visit registration data.
+     * @allow (update, delete) - Only the owner can update/delete. Need to be implemented if ownership is defined for VisitRegistration.
+     * @deny (update, delete) - If not owner, deny updates/deletes.
+     * @principle Allows public read access but restricts writes to owners (if implemented).
      */
     match /visit_registrations/{visitRegistrationId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
       allow get, list: if isSignedIn();
       allow create: if isSignedIn();
-      allow update, delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow update, delete: if false; // TODO: Add owner validation if the schema is updated with an ownership field.
     }
 
     /**
-     * @description Allows managing favorite visitors.
+     * @description Rules for the /favorite_visitors/{favoriteVisitorId} collection.
      * @path /favorite_visitors/{favoriteVisitorId}
-     * @allow (create) Authenticated user can create favorite visitors.
-     * @allow (get, list) Any authenticated user can read favorite visitors.
-     * @deny (update, delete) Only the owner can update or delete favorite visitors.
-     * @principle Authenticated users can create and read, owner-only updates and deletes.
+     * @allow (create) - Any authenticated user can create a favorite visitor.
+     * @allow (get, list) - Any authenticated user can read favorite visitor data.
+     * @allow (update, delete) - Only the owner can update/delete. Need to be implemented if ownership is defined for FavoriteVisitor.
+     * @deny (update, delete) - If not owner, deny updates/deletes.
+     * @principle Allows public read access but restricts writes to owners (if implemented).
      */
     match /favorite_visitors/{favoriteVisitorId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
       allow get, list: if isSignedIn();
       allow create: if isSignedIn();
-      allow update, delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow update, delete: if false; // TODO: Add owner validation if the schema is updated with an ownership field.
     }
 
     /**
-     * @description Allows reading list of current users in the office.
+     * @description Rules for the /usuaris_dins/{usuariId} collection.
      * @path /usuaris_dins/{usuariId}
-     * @allow (get, list) Any authenticated user can view the list of current users in the office.
-     * @deny (create, update, delete) No client-side writes allowed. This collection is managed by a trusted backend.
-     * @principle Allows public read access to presence information.
+     * @allow (get, list) - Any authenticated user can see who is in the office.
+     * @deny (create, update, delete) - Only a trusted backend can modify this collection.
+     * @principle Public read, backend-only write for a real-time "whiteboard".
      */
     match /usuaris_dins/{usuariId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
       allow get, list: if isSignedIn();
       allow create, update, delete: if false;
     }
