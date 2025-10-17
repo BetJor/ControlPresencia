@@ -1,5 +1,4 @@
 import { determineStaffPresent } from '@/ai/flows/determine-staff-present';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -67,7 +66,43 @@ export default async function PresentPeopleList() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <Accordion type="multiple" defaultValue={['employees', 'visitors']}>
+        <Accordion type="multiple" defaultValue={['visitors', 'employees']}>
+          <AccordionItem value="visitors">
+            <AccordionTrigger className="text-base font-medium">
+              <div className="flex items-center gap-2">
+                <Contact className="h-5 w-5" />
+                <span>Visitas ({presentVisitors.length})</span>
+              </div>
+            </AccordionTrigger>
+            <AccordionContent>
+               {presentVisitors.length > 0 ? (
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Nombre</TableHead>
+                            <TableHead className="hidden sm:table-cell">Empresa</TableHead>
+                            <TableHead className="hidden smn:table-cell">Hora Entrada</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {presentVisitors.map((visitor) => (
+                            <TableRow key={`vis-${visitor.id}`}>
+                                <TableCell>
+                                    <div className="font-medium">{visitor.name}</div>
+                                </TableCell>
+                                <TableCell className="hidden sm:table-cell">{visitor.company}</TableCell>
+                                <TableCell className="hidden sm:table-cell">{visitor.timestamp.toLocaleTimeString()}</TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+                ) : (
+                    <div className="text-center text-muted-foreground p-4">
+                        No hay visitas en la oficina.
+                    </div>
+                )}
+            </AccordionContent>
+          </AccordionItem>
           <AccordionItem value="employees">
             <AccordionTrigger className="text-base font-medium">
               <div className="flex items-center gap-2">
@@ -104,42 +139,6 @@ export default async function PresentPeopleList() {
                   No hay empleados en la oficina.
                 </div>
               )}
-            </AccordionContent>
-          </AccordionItem>
-          <AccordionItem value="visitors">
-            <AccordionTrigger className="text-base font-medium">
-              <div className="flex items-center gap-2">
-                <Contact className="h-5 w-5" />
-                <span>Visitas ({presentVisitors.length})</span>
-              </div>
-            </AccordionTrigger>
-            <AccordionContent>
-               {presentVisitors.length > 0 ? (
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Nombre</TableHead>
-                            <TableHead className="hidden sm:table-cell">Empresa</TableHead>
-                            <TableHead className="hidden smn:table-cell">Hora Entrada</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {presentVisitors.map((visitor) => (
-                            <TableRow key={`vis-${visitor.id}`}>
-                                <TableCell>
-                                    <div className="font-medium">{visitor.name}</div>
-                                </TableCell>
-                                <TableCell className="hidden sm:table-cell">{visitor.company}</TableCell>
-                                <TableCell className="hidden sm:table-cell">{visitor.timestamp.toLocaleTimeString()}</TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-                ) : (
-                    <div className="text-center text-muted-foreground p-4">
-                        No hay visitas en la oficina.
-                    </div>
-                )}
             </AccordionContent>
           </AccordionItem>
         </Accordion>
