@@ -5,11 +5,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
 import { collection } from "firebase/firestore";
-import { Loader2, BookUser, Mail, Phone, Search } from "lucide-react";
+import { Loader2, BookUser, Mail, Phone, Search, ChevronsUpDown, Check } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 import type { Directori } from "@/lib/types";
 
 
@@ -17,6 +20,7 @@ export default function DirectoryPage() {
     const firestore = useFirestore();
     const [nameFilter, setNameFilter] = useState('');
     const [departmentFilter, setDepartmentFilter] = useState('');
+    const [departmentOpen, setDepartmentOpen] = useState(false);
 
     const directoriCollection = useMemoFirebase(() => {
         if (!firestore) return null;
@@ -36,10 +40,12 @@ export default function DirectoryPage() {
         return employees.filter(employee => {
             const fullName = `${employee.nom} ${employee.cognom}`.toLowerCase();
             const nameMatch = nameFilter ? fullName.includes(nameFilter.toLowerCase()) : true;
-            const departmentMatch = departmentFilter ? employee.departament === departmentFilter : true;
+            const departmentMatch = departmentFilter ? employee.departament.toLowerCase().includes(departmentFilter.toLowerCase()) : true;
             return nameMatch && departmentMatch;
         });
     }, [employees, nameFilter, departmentFilter]);
+    
+    const currentDepartment = departments.find(dep => dep.toLowerCase() === departmentFilter.toLowerCase())
 
     return (
         <Card>
@@ -62,17 +68,59 @@ export default function DirectoryPage() {
                         />
                     </div>
                      <div className="w-full md:w-1/2">
-                        <Select value={departmentFilter} onValueChange={(value) => setDepartmentFilter(value === 'all' ? '' : value)}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Filtrar por departamento..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">Todos los departamentos</SelectItem>
-                                {departments.map(dep => (
-                                    <SelectItem key={dep} value={dep}>{dep}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <Popover open={departmentOpen} onOpenChange={setDepartmentOpen}>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    role="combobox"
+                                    aria-expanded={departmentOpen}
+                                    className="w-full justify-between"
+                                >
+                                    {currentDepartment
+                                        ? currentDepartment
+                                        : "Seleccionar departamento..."}
+                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                                <Command>
+                                    <CommandInput 
+                                      placeholder="Buscar departamento..." 
+                                      value={departmentFilter} 
+                                      onValueChange={setDepartmentFilter}
+                                    />
+                                    <CommandList>
+                                        <CommandEmpty>No se encontró el departamento.</CommandEmpty>
+                                        <CommandGroup>
+                                             <CommandItem
+                                                key="all-departments"
+                                                value=""
+                                                onSelect={() => {
+                                                    setDepartmentFilter("");
+                                                    setDepartmentOpen(false);
+                                                }}
+                                             >
+                                                <Check className={cn("mr-2 h-4 w-4", departmentFilter === "" ? "opacity-100" : "opacity-0")} />
+                                                Todos los departamentos
+                                             </CommandItem>
+                                            {departments.map((dep) => (
+                                                <CommandItem
+                                                    key={dep}
+                                                    value={dep}
+                                                    onSelect={(currentValue) => {
+                                                        setDepartmentFilter(currentValue.toLowerCase() === departmentFilter ? "" : currentValue);
+                                                        setDepartmentOpen(false);
+                                                    }}
+                                                >
+                                                    <Check className={cn("mr-2 h-4 w-4", departmentFilter === dep.toLowerCase() ? "opacity-100" : "opacity-0")} />
+                                                    {dep}
+                                                </CommandItem>
+                                            ))}
+                                        </CommandGroup>
+                                    </CommandList>
+                                </Command>
+                            </PopoverContent>
+                        </Popover>
                     </div>
                 </div>
 
