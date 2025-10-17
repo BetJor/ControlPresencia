@@ -91,7 +91,9 @@ export default function DirectoryPage() {
                                             </Avatar>
                                             <div>
                                                 <p className="font-medium">{employee.nom} {employee.cognom}</p>
-                                                <p className="text-sm text-muted-foreground">{employee.email}</p>
+                                                <a href={`mailto:${employee.email}`} className="text-sm text-muted-foreground hover:text-primary">
+                                                    {employee.email}
+                                                </a>
                                             </div>
                                         </div>
                                     </TableCell>
@@ -104,15 +106,17 @@ export default function DirectoryPage() {
                                     <TableCell className="hidden md:table-cell">
                                         <Badge variant="secondary">{employee.departament}</Badge>
                                     </TableCell>
-                                    <TableCell className="text-right">
-                                        <div className="flex justify-end items-center gap-2">
+                                     <TableCell className="text-right">
+                                        <div className="flex flex-col items-end gap-1">
                                             {employee.telefons?.[0] && (
-                                                <a href={`tel:${employee.telefons[0]}`} className="text-muted-foreground hover:text-primary">
+                                                <a href={`tel:${employee.telefons[0]}`} className="flex items-center gap-2 text-muted-foreground hover:text-primary">
                                                     <Phone className="h-4 w-4" />
+                                                    <span>{employee.telefons[0]}</span>
                                                 </a>
                                             )}
-                                            <a href={`mailto:${employee.email}`} className="text-muted-foreground hover:text-primary">
+                                            <a href={`mailto:${employee.email}`} className="flex items-center gap-2 text-muted-foreground hover:text-primary">
                                                 <Mail className="h-4 w-4" />
+                                                <span>Email</span>
                                             </a>
                                         </div>
                                     </TableCell>
