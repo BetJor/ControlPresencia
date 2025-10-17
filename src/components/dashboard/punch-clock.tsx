@@ -51,11 +51,13 @@ export default function PunchClock() {
   const { data: favoriteVisitors, isLoading: favoritesLoading } = useCollection<FavoriteVisitor>(favoriteVisitorsCollection);
 
   React.useEffect(() => {
-    if (favoriteVisitors) {
+    if (favoriteVisitors && visitorName && visitorCompany) {
       const isAlreadyFavorite = favoriteVisitors.some(
         (fav) => fav.name.toLowerCase() === visitorName.toLowerCase() && fav.company.toLowerCase() === visitorCompany.toLowerCase()
       );
       setIsFavorite(isAlreadyFavorite);
+    } else {
+        setIsFavorite(false);
     }
   }, [visitorName, visitorCompany, favoriteVisitors]);
 
@@ -261,22 +263,22 @@ export default function PunchClock() {
                                         </div>
                                         <div className="grid gap-2">
                                             <Label htmlFor="visitor-company">Empresa</Label>
-                                            <Input 
-                                                id="visitor-company"
-                                                placeholder="Nombre de la empresa"
-                                                value={visitorCompany}
-                                                onChange={(e) => setVisitorCompany(e.target.value)}
-                                            />
+                                            <div className="flex items-center gap-2">
+                                                <Input 
+                                                    id="visitor-company"
+                                                    placeholder="Nombre de la empresa"
+                                                    value={visitorCompany}
+                                                    onChange={(e) => setVisitorCompany(e.target.value)}
+                                                    className="w-full"
+                                                />
+                                                <Button variant="ghost" size="icon" onClick={() => setIsFavorite(!isFavorite)} disabled={isLoading || !visitorName || !visitorCompany}>
+                                                    <Star className={cn("h-5 w-5", isFavorite ? "fill-primary text-primary" : "text-muted-foreground")} />
+                                                </Button>
+                                            </div>
                                         </div>
                                     </div>
 
                                     <div className="flex items-center gap-4 mt-4">
-                                        <div className="flex items-center space-x-2">
-                                            <Button variant="ghost" size="sm" onClick={() => setIsFavorite(!isFavorite)} disabled={isLoading || !visitorName || !visitorCompany}>
-                                                <Star className={cn("h-4 w-4", isFavorite ? "fill-primary text-primary" : "text-muted-foreground")} />
-                                                <span className="ml-2 text-sm text-muted-foreground">Guardar como favorito</span>
-                                            </Button>
-                                        </div>
                                         <Button onClick={handleVisitorEntry} className='w-full' disabled={isLoading || !visitorName || !visitorCompany}>
                                             <UserPlus className='mr-2'/>
                                             Registrar Visita
