@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
-import { collection, query, where, and, or, orderBy, limit, startAfter, endBefore, getDocs, QueryDocumentSnapshot, DocumentData } from "firebase/firestore";
+import { collection, query, where, and, or, orderBy, limit, startAfter, QueryDocumentSnapshot, DocumentData } from "firebase/firestore";
 import { Loader2, BookUser, Mail, Phone, Search, ChevronsUpDown, Check, XIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -23,12 +23,9 @@ export default function DirectoryPage() {
     const [departmentFilter, setDepartmentFilter] = useState('');
     const [departmentOpen, setDepartmentOpen] = useState(false);
     
-    // Pagination state
     const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
-    const [firstVisible, setFirstVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
-    const [page, setPage] = useState(1);
     const [pageHistory, setPageHistory] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]);
-
+    const [currentPage, setCurrentPage] = useState(1);
 
     const allDepartmentsCollection = useMemoFirebase(() => {
         if (!firestore) return null;
@@ -47,39 +44,41 @@ export default function DirectoryPage() {
 
         const baseCollection = collection(firestore, 'directori');
         let conditions = [];
-        
+
         if (departmentFilter) {
             conditions.push(where('departament', '==', departmentFilter));
         }
 
+        const nameFilterLower = nameFilter.toLowerCase();
+        const nameEnd = nameFilterLower + '\uf8ff';
         if (nameFilter) {
-            const nameEnd = nameFilter.toLowerCase() + '\uf8ff';
-            conditions.push(or(
-                and(where('nom', '>=', nameFilter), where('nom', '<', nameEnd)),
-                and(where('cognom', '>=', nameFilter), where('cognom', '<', nameEnd))
-            ));
+             conditions.push(
+                or(
+                    and(where('nom', '>=', nameFilter), where('nom', '<', nameEnd)),
+                    and(where('cognom', '>=', nameFilter), where('cognom', '<', nameEnd))
+                )
+            );
         }
         
-        const q = query(
-            baseCollection,
-            ...conditions,
-            orderBy('nom'),
-            limit(PAGE_SIZE + 1),
-             ...(page > 1 && lastVisible ? [startAfter(lastVisible)] : [])
-        );
+        let q = query(baseCollection, ...conditions, orderBy('nom'), limit(PAGE_SIZE + 1));
+        
+        const lastDoc = pageHistory[currentPage -1];
+        if (currentPage > 1 && lastDoc) {
+             q = query(baseCollection, ...conditions, orderBy('nom'), startAfter(lastDoc), limit(PAGE_SIZE + 1));
+        }
 
         return q;
-
-    }, [firestore, departmentFilter, nameFilter, lastVisible, page]);
+    }, [firestore, departmentFilter, nameFilter, currentPage, pageHistory]);
 
 
     const { data, isLoading: isLoadingData } = useCollection<Directori>(directoriQuery, {
       onNewData: (snapshot) => {
         if (snapshot && !snapshot.empty) {
-            setFirstVisible(snapshot.docs[0]);
-            setLastVisible(snapshot.docs[snapshot.docs.length - 1]);
+            const newLastVisible = snapshot.docs[snapshot.docs.length-1];
+             if(data && data?.length > PAGE_SIZE) {
+                setLastVisible(newLastVisible);
+             }
         } else {
-            setFirstVisible(null);
             setLastVisible(null);
         }
       }
@@ -91,29 +90,25 @@ export default function DirectoryPage() {
     }, [data]);
 
     const hasNextPage = data ? data.length > PAGE_SIZE : false;
-    const hasPrevPage = page > 1;
+    const hasPrevPage = currentPage > 1;
 
     const handleNextPage = () => {
-        if (hasNextPage) {
+        if (hasNextPage && lastVisible) {
             setPageHistory(prev => [...prev, lastVisible]);
-            setPage(prev => prev + 1);
+            setCurrentPage(prev => prev + 1);
         }
     };
     
     const handlePrevPage = () => {
         if (hasPrevPage) {
-            const prevLastVisible = pageHistory[page - 2] || null;
-            setLastVisible(prevLastVisible);
             setPageHistory(prev => prev.slice(0, -1));
-            setPage(prev => prev - 1);
+            setCurrentPage(prev => prev - 1);
         }
     };
     
-    // Reset pagination when filters change
     useMemo(() => {
-        setPage(1);
+        setCurrentPage(1);
         setLastVisible(null);
-        setFirstVisible(null);
         setPageHistory([null]);
     }, [nameFilter, departmentFilter]);
 
