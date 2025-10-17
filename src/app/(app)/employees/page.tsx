@@ -58,14 +58,26 @@ export default function DirectoryPage() {
             </CardHeader>
             <CardContent>
                 <div className="flex flex-col md:flex-row items-center gap-4 mb-6">
-                    <div className="relative w-full md:w-1/2">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                            placeholder="Buscar por nombre..."
-                            value={nameFilter}
-                            onChange={(e) => setNameFilter(e.target.value)}
-                            className="pl-10"
-                        />
+                    <div className="relative w-full md:w-1/2 flex items-center gap-2">
+                        <div className="relative w-full">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                placeholder="Buscar por nombre..."
+                                value={nameFilter}
+                                onChange={(e) => setNameFilter(e.target.value)}
+                                className="pl-10"
+                            />
+                             {nameFilter && (
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setNameFilter('')}
+                                    className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8"
+                                >
+                                    <XIcon className="h-4 w-4" />
+                                </Button>
+                            )}
+                        </div>
                     </div>
                      <div className="w-full md:w-1/2 flex items-center gap-2">
                         <Popover open={departmentOpen} onOpenChange={setDepartmentOpen}>
