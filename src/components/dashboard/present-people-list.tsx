@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { mockEmployees, mockPunches, mockVisitors } from '@/lib/mock-data';
 import type { Employee, Visitor } from '@/lib/types';
 import { Contact, Users, User } from 'lucide-react';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 const getTodaysPunches = () => {
   const today = new Date();
@@ -66,69 +67,100 @@ export default async function PresentPeopleList() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[80px]">Avatar</TableHead>
-              <TableHead>Nombre</TableHead>
-              <TableHead>Tipo</TableHead>
-              <TableHead className="hidden sm:table-cell">Detalle</TableHead>
-              <TableHead className="hidden sm:table-cell">Hora Entrada</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-             {presentStaff.map((employee) => (
-                <TableRow key={`emp-${employee.id}`}>
-                    <TableCell>
-                        <Avatar className="h-10 w-10">
-                            <AvatarImage src={employee.avatarUrl} alt={employee.name} />
-                            <AvatarFallback>{employee.name.charAt(0)}{employee.cognoms.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                    </TableCell>
-                    <TableCell>
-                        <div className="font-medium">{employee.name} {employee.cognoms}</div>
-                    </TableCell>
-                    <TableCell>
-                        <Badge variant="secondary" className="flex items-center gap-1 w-fit">
-                            <User className="h-3 w-3" />
-                            Empleado
-                        </Badge>
-                    </TableCell>
-                    <TableCell className="hidden sm:table-cell">{employee.role}</TableCell>
-                    <TableCell className="hidden sm:table-cell">
-                        {todaysPunches.find(p => p.employeeId === employee.id)?.timestamp.toLocaleTimeString()}
-                    </TableCell>
-                </TableRow>
-             ))}
-             {presentVisitors.map((visitor) => (
-                <TableRow key={`vis-${visitor.id}`}>
-                    <TableCell>
-                        <Avatar className="h-10 w-10">
-                            <AvatarFallback>{visitor.name.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                    </TableCell>
-                    <TableCell>
-                        <div className="font-medium">{visitor.name}</div>
-                    </TableCell>
-                    <TableCell>
-                        <Badge variant="outline" className="flex items-center gap-1 w-fit">
-                            <Contact className="h-3 w-3" />
-                            Visita
-                        </Badge>
-                    </TableCell>
-                    <TableCell className="hidden sm:table-cell">{visitor.company}</TableCell>
-                    <TableCell className="hidden sm:table-cell">{visitor.timestamp.toLocaleTimeString()}</TableCell>
-                </TableRow>
-             ))}
-             {totalPresent === 0 && (
-                <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground">
-                        No hay nadie en la oficina en este momento.
-                    </TableCell>
-                </TableRow>
-             )}
-          </TableBody>
-        </Table>
+        <Accordion type="multiple" defaultValue={['employees', 'visitors']}>
+          <AccordionItem value="employees">
+            <AccordionTrigger className="text-base font-medium">
+              <div className="flex items-center gap-2">
+                <User className="h-5 w-5" />
+                <span>Empleados ({presentStaff.length})</span>
+              </div>
+            </AccordionTrigger>
+            <AccordionContent>
+              {presentStaff.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[80px]">Avatar</TableHead>
+                      <TableHead>Nombre</TableHead>
+                      <TableHead className="hidden sm:table-cell">Rol</TableHead>
+                      <TableHead className="hidden sm:table-cell">Hora Entrada</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                     {presentStaff.map((employee) => (
+                        <TableRow key={`emp-${employee.id}`}>
+                            <TableCell>
+                                <Avatar className="h-10 w-10">
+                                    <AvatarImage src={employee.avatarUrl} alt={employee.name} />
+                                    <AvatarFallback>{employee.name.charAt(0)}{employee.cognoms.charAt(0)}</AvatarFallback>
+                                </Avatar>
+                            </TableCell>
+                            <TableCell>
+                                <div className="font-medium">{employee.name} {employee.cognoms}</div>
+                            </TableCell>
+                            <TableCell className="hidden sm:table-cell">{employee.role}</TableCell>
+                            <TableCell className="hidden sm:table-cell">
+                                {todaysPunches.find(p => p.employeeId === employee.id)?.timestamp.toLocaleTimeString()}
+                            </TableCell>
+                        </TableRow>
+                     ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="text-center text-muted-foreground p-4">
+                  No hay empleados en la oficina.
+                </div>
+              )}
+            </AccordionContent>
+          </AccordionItem>
+          <AccordionItem value="visitors">
+            <AccordionTrigger className="text-base font-medium">
+              <div className="flex items-center gap-2">
+                <Contact className="h-5 w-5" />
+                <span>Visitas ({presentVisitors.length})</span>
+              </div>
+            </AccordionTrigger>
+            <AccordionContent>
+               {presentVisitors.length > 0 ? (
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead className="w-[80px]">Avatar</TableHead>
+                            <TableHead>Nombre</TableHead>
+                            <TableHead className="hidden sm:table-cell">Empresa</TableHead>
+                            <TableHead className="hidden sm:table-cell">Hora Entrada</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {presentVisitors.map((visitor) => (
+                            <TableRow key={`vis-${visitor.id}`}>
+                                <TableCell>
+                                    <Avatar className="h-10 w-10">
+                                        <AvatarFallback>{visitor.name.charAt(0)}</AvatarFallback>
+                                    </Avatar>
+                                </TableCell>
+                                <TableCell>
+                                    <div className="font-medium">{visitor.name}</div>
+                                </TableCell>
+                                <TableCell className="hidden sm:table-cell">{visitor.company}</TableCell>
+                                <TableCell className="hidden sm:table-cell">{visitor.timestamp.toLocaleTimeString()}</TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+                ) : (
+                    <div className="text-center text-muted-foreground p-4">
+                        No hay visitas en la oficina.
+                    </div>
+                )}
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+         {totalPresent === 0 && (
+            <div className="text-center text-muted-foreground pt-4">
+                No hay nadie en la oficina en este momento.
+            </div>
+         )}
       </CardContent>
     </Card>
   );
