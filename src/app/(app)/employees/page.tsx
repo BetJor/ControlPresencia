@@ -4,8 +4,8 @@ import { useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
-import { collection, query, where, and, or, orderBy } from "firebase/firestore";
-import { Loader2, BookUser, Mail, Phone, Search, ChevronsUpDown, Check, XIcon } from "lucide-react";
+import { collection, query, where, and, or, orderBy, limit, startAfter, endBefore, getDocs, QueryDocumentSnapshot, DocumentData } from "firebase/firestore";
+import { Loader2, BookUser, Mail, Phone, Search, ChevronsUpDown, Check, XIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Input } from '@/components/ui/input';
@@ -15,14 +15,19 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { cn } from "@/lib/utils";
 import type { Directori } from "@/lib/types";
 
+const PAGE_SIZE = 15;
 
 export default function DirectoryPage() {
     const firestore = useFirestore();
     const [nameFilter, setNameFilter] = useState('');
     const [departmentFilter, setDepartmentFilter] = useState('');
     const [departmentOpen, setDepartmentOpen] = useState(false);
+    
+    // Pagination state
+    const [paginationDirection, setPaginationDirection] = useState<'next' | 'prev' | null>(null);
+    const [pageCursors, setPageCursors] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]);
+    const [currentPageIndex, setCurrentPageIndex] = useState(0);
 
-    // This query is now for getting all unique departments for the dropdown
     const allDepartmentsCollection = useMemoFirebase(() => {
         if (!firestore) return null;
         return query(collection(firestore, 'directori'), orderBy('departament'));
@@ -34,12 +39,11 @@ export default function DirectoryPage() {
         const allDepartments = allEmployeesForDepts.map(employee => employee.departament).filter(Boolean);
         return [...new Set(allDepartments)];
     }, [allEmployeesForDepts]);
-
+    
     const directoriQuery = useMemoFirebase(() => {
         if (!firestore) return null;
 
         const baseCollection = collection(firestore, 'directori');
-        
         let conditions = [];
         
         if (departmentFilter) {
@@ -52,34 +56,84 @@ export default function DirectoryPage() {
             conditions.push(
                 or(
                     and(where('nom', '>=', nameFilter), where('nom', '<', nameFilter + '\uf8ff')),
-                    and(where('cognom', '>=', nameFilter), where('cognom', '<', nameFilter + '\uf8ff')),
-                     // Basic attempt for full name search, requires lowercase fields for better results
-                    and(where('nom', '>=', nameFilter.split(' ')[0] || ''), where('nom', '<', (nameFilter.split(' ')[0] || '') + '\uf8ff'))
+                    and(where('cognom', '>=', nameFilter), where('cognom', '<', nameFilter + '\uf8ff'))
                 )
             );
         }
+        
+        const cursor = pageCursors[currentPageIndex];
+        const orderByClauses = [orderBy('nom')];
+        const paginationClauses = [];
 
-        // Add orderBy clauses. If nameFilter is active, order by 'nom'
-        const orderByClauses = [];
-        if (nameFilter) {
-            orderByClauses.push(orderBy('nom'));
-        }
-        orderByClauses.push(orderBy('departament'));
-
-
-        if (conditions.length > 0) {
-            return query(baseCollection, ...conditions, ...orderByClauses);
+        if (cursor) {
+            if (paginationDirection === 'next') {
+                paginationClauses.push(startAfter(cursor));
+            } else if (paginationDirection === 'prev') {
+                // For 'prev', we need to reverse the query order, then reverse the results
+                orderByClauses.unshift(orderBy('nom', 'desc')); // This overrides the previous orderBy
+                paginationClauses.push(startAfter(cursor));
+            }
         }
         
-        return query(baseCollection, orderBy('nom'));
+        const finalQueryParts = [
+            baseCollection,
+            ...conditions,
+            ...orderByClauses,
+            limit(PAGE_SIZE + 1), // Fetch one extra to see if there's a next page
+            ...paginationClauses
+        ];
 
-    }, [firestore, departmentFilter, nameFilter]);
+        // This is a hack to get around the issue of having multiple orderBy clauses with the same field
+        if (paginationDirection === 'prev') {
+             finalQueryParts.splice(2, 1);
+        }
 
-    const { data: employees, isLoading } = useCollection<Directori>(directoriQuery);
+        return query.apply(null, finalQueryParts as any);
+
+    }, [firestore, departmentFilter, nameFilter, currentPageIndex, pageCursors, paginationDirection]);
+
+
+    const { data, isLoading: isLoadingData } = useCollection<Directori>(directoriQuery);
+
+    const employees = useMemo(() => {
+        if (!data) return [];
+        const records = paginationDirection === 'prev' ? data.slice(0, PAGE_SIZE).reverse() : data.slice(0, PAGE_SIZE);
+        return records;
+    }, [data, paginationDirection]);
+
+    const hasNextPage = data ? data.length > PAGE_SIZE : false;
+    const hasPrevPage = currentPageIndex > 0;
+
+    const handleNextPage = () => {
+        if (employees.length > 0 && hasNextPage) {
+            const lastDoc = data![employees.length - 1] as any;
+             setPageCursors(prev => {
+                const newCursors = [...prev];
+                newCursors[currentPageIndex + 1] = lastDoc;
+                return newCursors;
+            });
+            setPaginationDirection('next');
+            setCurrentPageIndex(prev => prev + 1);
+        }
+    };
     
-    const currentDepartment = departments.find(dep => dep === departmentFilter)
+    const handlePrevPage = () => {
+        if (currentPageIndex > 0) {
+            setPaginationDirection('prev');
+            setCurrentPageIndex(prev => prev - 1);
+        }
+    };
+    
+    // Reset pagination when filters change
+    useMemo(() => {
+        setCurrentPageIndex(0);
+        setPageCursors([null]);
+        setPaginationDirection('next');
+    }, [nameFilter, departmentFilter]);
 
-    const effectiveIsLoading = isLoading || isLoadingDepts;
+
+    const currentDepartment = departments.find(dep => dep === departmentFilter)
+    const effectiveIsLoading = isLoadingData || isLoadingDepts;
 
     return (
         <Card>
@@ -92,7 +146,7 @@ export default function DirectoryPage() {
             </CardHeader>
             <CardContent>
                 <div className="flex flex-col md:flex-row items-center gap-4 mb-6">
-                    <div className="relative w-full md:w-1/2 flex items-center gap-2">
+                     <div className="relative w-full md:w-1/2 flex items-center gap-2">
                         <div className="relative w-full">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input
@@ -179,6 +233,7 @@ export default function DirectoryPage() {
                         <p className="ml-2">Cargando directorio...</p>
                     </div>
                 ) : employees && employees.length > 0 ? (
+                    <>
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -219,7 +274,7 @@ export default function DirectoryPage() {
                                             {employee.telefons?.[0] && (
                                                 <a href={`tel:${employee.telefons[0]}`} className="flex items-center justify-end gap-2 text-muted-foreground hover:text-primary">
                                                     <Phone className="h-4 w-4" />
-                                                    <span>{employee.telefons[0]}</span>
+                                                     <span>{employee.telefons[0]}</span>
                                                 </a>
                                             )}
                                             <a href={`mailto:${employee.email}`} className="flex items-center justify-end gap-2 text-muted-foreground hover:text-primary">
@@ -232,6 +287,27 @@ export default function DirectoryPage() {
                             ))}
                         </TableBody>
                     </Table>
+                     <div className="flex justify-end items-center gap-2 pt-4">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handlePrevPage}
+                            disabled={!hasPrevPage || effectiveIsLoading}
+                        >
+                            <ChevronLeft className="h-4 w-4 mr-1" />
+                            Anterior
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleNextPage}
+                            disabled={!hasNextPage || effectiveIsLoading}
+                        >
+                            Siguiente
+                            <ChevronRight className="h-4 w-4 ml-1" />
+                        </Button>
+                    </div>
+                    </>
                 ) : (
                     <div className="text-center text-muted-foreground py-8">
                          <p>No se han encontrado empleados que coincidan con la búsqueda.</p>
