@@ -2,11 +2,9 @@
 import * as React from "react"
 import { Button } from '@/components/ui/button';
 import {
-  Card,
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
 } from '@/components/ui/card';
 import {
     Accordion,
@@ -16,12 +14,13 @@ import {
   } from "@/components/ui/accordion"
 import { useToast } from '@/hooks/use-toast';
 import { mockEmployees } from '@/lib/mock-data';
-import { Contact, Edit, Fingerprint, UserPlus, Check, ChevronsUpDown } from 'lucide-react';
+import { Contact, Edit, Fingerprint, UserPlus, Check, ChevronsUpDown, Star } from 'lucide-react';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
+import { Card, CardTitle } from "@/components/ui/card";
 
 export default function PunchClock() {
   const { toast } = useToast();
@@ -130,10 +129,15 @@ export default function PunchClock() {
                                     <Input id='visitor-company' placeholder="Nombre de la empresa" />
                                 </div>
                             </div>
-                            <Button onClick={handleVisitorEntry} className='mt-4 w-full'>
-                                    <UserPlus className='mr-2'/>
-                                    Registrar Visita
-                                </Button>
+                                <div className="flex items-center gap-4 mt-4">
+                                    <Button onClick={handleVisitorEntry} className='w-full'>
+                                        <UserPlus className='mr-2'/>
+                                        Registrar Visita
+                                    </Button>
+                                    <Button variant="outline" size="icon">
+                                        <Star className="h-4 w-4" />
+                                    </Button>
+                                </div>
                             </div>
                         </div>
                     </AccordionContent>
