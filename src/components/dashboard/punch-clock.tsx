@@ -1,4 +1,5 @@
 'use client';
+import * as React from "react"
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -14,12 +15,17 @@ import {
   } from "@/components/ui/accordion"
 import { useToast } from '@/hooks/use-toast';
 import { mockEmployees } from '@/lib/mock-data';
-import { Contact, Edit, Fingerprint, UserPlus } from 'lucide-react';
+import { Contact, Edit, Fingerprint, UserPlus, Check, ChevronsUpDown } from 'lucide-react';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 
 export default function PunchClock() {
   const { toast } = useToast();
+  const [open, setOpen] = React.useState(false)
+  const [value, setValue] = React.useState("")
 
   const handleManualPunch = () => {
     toast({
@@ -59,7 +65,47 @@ export default function PunchClock() {
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="grid gap-2">
                                     <Label htmlFor="employee-search">Empleado</Label>
-                                    <Input id="employee-search" placeholder="Buscar empleado..." />
+                                    <Popover open={open} onOpenChange={setOpen}>
+                                        <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={open}
+                                            className="w-full justify-between"
+                                        >
+                                            {value
+                                            ? mockEmployees.find((employee) => `${employee.name.toLowerCase()} ${employee.cognoms.toLowerCase()}` === value)?.name
+                                            : "Seleccionar empleado..."}
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-[200px] p-0">
+                                        <Command>
+                                            <CommandInput placeholder="Buscar empleado..." />
+                                            <CommandEmpty>No se encontró el empleado.</CommandEmpty>
+                                            <CommandGroup>
+                                            {mockEmployees.map((employee) => (
+                                                <CommandItem
+                                                key={employee.id}
+                                                value={`${employee.name.toLowerCase()} ${employee.cognoms.toLowerCase()}`}
+                                                onSelect={(currentValue) => {
+                                                    setValue(currentValue === value ? "" : currentValue)
+                                                    setOpen(false)
+                                                }}
+                                                >
+                                                <Check
+                                                    className={cn(
+                                                    "mr-2 h-4 w-4",
+                                                    value === `${employee.name.toLowerCase()} ${employee.cognoms.toLowerCase()}` ? "opacity-100" : "opacity-0"
+                                                    )}
+                                                />
+                                                {employee.name} {employee.cognoms}
+                                                </CommandItem>
+                                            ))}
+                                            </CommandGroup>
+                                        </Command>
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
                                 <div className='grid gap-2'>
                                     <Label>&nbsp;</Label>
