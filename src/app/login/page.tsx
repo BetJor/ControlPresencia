@@ -1,3 +1,4 @@
+'use client';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -6,9 +7,37 @@ import { PlaceHolderImages } from "@/lib/placeholder-images";
 import { Clock } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { useAuth, useUser, initiateEmailSignIn } from '@/firebase';
+import { useRouter } from 'next/navigation';
+import { useEffect } from "react";
 
 export default function LoginPage() {
   const loginBg = PlaceHolderImages.find(p => p.id === 'login-background');
+  const auth = useAuth();
+  const { user, isUserLoading } = useUser();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (user) {
+      router.push('/dashboard');
+    }
+  }, [user, router]);
+
+  const handleLogin = () => {
+    // For now, we'll use a hardcoded user for demo purposes.
+    initiateEmailSignIn(auth, 'admin@example.com', 'password');
+  };
+
+  if (isUserLoading || user) {
+    return (
+        <div className="flex items-center justify-center min-h-screen">
+            <div className="flex flex-col items-center gap-4">
+                <Clock className="h-12 w-12 text-primary animate-spin" />
+                <p className="text-muted-foreground">Cargando...</p>
+            </div>
+        </div>
+    );
+  }
 
   return (
     <div className="w-full lg:grid lg:min-h-screen lg:grid-cols-2">
@@ -46,8 +75,8 @@ export default function LoginPage() {
               </div>
               <Input id="password" type="password" required defaultValue="password" />
             </div>
-            <Button type="submit" className="w-full" asChild>
-              <Link href="/dashboard">Acceder</Link>
+            <Button type="submit" className="w-full" onClick={handleLogin}>
+              Acceder
             </Button>
             <Button variant="outline" className="w-full">
               Acceder con Google
