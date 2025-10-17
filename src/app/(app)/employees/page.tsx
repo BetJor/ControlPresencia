@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
@@ -23,9 +23,8 @@ export default function DirectoryPage() {
     const [departmentFilter, setDepartmentFilter] = useState('');
     const [departmentOpen, setDepartmentOpen] = useState(false);
     
-    const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
-    const [pageHistory, setPageHistory] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]);
-    const [currentPage, setCurrentPage] = useState(1);
+    const [paginationCursors, setPaginationCursors] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]);
+    const [currentPage, setCurrentPage] = useState(0);
 
     const allDepartmentsCollection = useMemoFirebase(() => {
         if (!firestore) return null;
@@ -48,68 +47,54 @@ export default function DirectoryPage() {
         if (departmentFilter) {
             conditions.push(where('departament', '==', departmentFilter));
         }
-
-        const nameFilterLower = nameFilter.toLowerCase();
-        const nameEnd = nameFilterLower + '\uf8ff';
-        if (nameFilter) {
-             conditions.push(
+        
+        const nameFilterLower = nameFilter.toLowerCase().trim();
+        if (nameFilterLower) {
+            const nameEnd = nameFilterLower + '\uf8ff';
+            conditions.push(
                 or(
-                    and(where('nom', '>=', nameFilter), where('nom', '<', nameEnd)),
-                    and(where('cognom', '>=', nameFilter), where('cognom', '<', nameEnd))
+                    and(where('nom', '>=', nameFilterLower), where('nom', '<=', nameEnd)),
+                    and(where('cognom', '>=', nameFilterLower), where('cognom', '<=', nameEnd))
                 )
             );
         }
-        
-        let q = query(baseCollection, ...conditions, orderBy('nom'), limit(PAGE_SIZE + 1));
-        
-        const lastDoc = pageHistory[currentPage -1];
-        if (currentPage > 1 && lastDoc) {
-             q = query(baseCollection, ...conditions, orderBy('nom'), startAfter(lastDoc), limit(PAGE_SIZE + 1));
-        }
 
+        const q = query(
+            baseCollection, 
+            ...conditions, 
+            orderBy('nom'), 
+            startAfter(paginationCursors[currentPage] || null),
+            limit(PAGE_SIZE + 1)
+        );
+        
         return q;
-    }, [firestore, departmentFilter, nameFilter, currentPage, pageHistory]);
+    }, [firestore, departmentFilter, nameFilter, currentPage, paginationCursors]);
 
 
-    const { data, isLoading: isLoadingData } = useCollection<Directori>(directoriQuery, {
-      onNewData: (snapshot) => {
-        if (snapshot && !snapshot.empty) {
-            const newLastVisible = snapshot.docs[snapshot.docs.length-1];
-             if(data && data?.length > PAGE_SIZE) {
-                setLastVisible(newLastVisible);
-             }
-        } else {
-            setLastVisible(null);
-        }
-      }
-    });
+    const { data: employeesData, isLoading: isLoadingData } = useCollection<Directori>(directoriQuery);
 
-    const employees = useMemo(() => {
-        if (!data) return [];
-        return data.slice(0, PAGE_SIZE);
-    }, [data]);
-
-    const hasNextPage = data ? data.length > PAGE_SIZE : false;
-    const hasPrevPage = currentPage > 1;
+    const employees = useMemo(() => employeesData?.slice(0, PAGE_SIZE) ?? [], [employeesData]);
+    const hasNextPage = (employeesData?.length ?? 0) > PAGE_SIZE;
+    const hasPrevPage = currentPage > 0;
 
     const handleNextPage = () => {
-        if (hasNextPage && lastVisible) {
-            setPageHistory(prev => [...prev, lastVisible]);
+        if (hasNextPage && employeesData) {
+            const lastDoc = employeesData[employeesData.length - 2];
+            setPaginationCursors(prev => [...prev, lastDoc]);
             setCurrentPage(prev => prev + 1);
         }
     };
     
     const handlePrevPage = () => {
         if (hasPrevPage) {
-            setPageHistory(prev => prev.slice(0, -1));
+            setPaginationCursors(prev => prev.slice(0, -1));
             setCurrentPage(prev => prev - 1);
         }
     };
     
-    useMemo(() => {
-        setCurrentPage(1);
-        setLastVisible(null);
-        setPageHistory([null]);
+    useEffect(() => {
+        setCurrentPage(0);
+        setPaginationCursors([null]);
     }, [nameFilter, departmentFilter]);
 
 
@@ -187,7 +172,8 @@ export default function DirectoryPage() {
                                                     key={dep}
                                                     value={dep}
                                                     onSelect={(currentValue) => {
-                                                        setDepartmentFilter(currentValue === departmentFilter.toLowerCase() ? "" : dep);
+                                                        const newFilter = dep.toLowerCase() === departmentFilter.toLowerCase() ? "" : dep;
+                                                        setDepartmentFilter(newFilter);
                                                         setDepartmentOpen(false);
                                                     }}
                                                 >
@@ -208,66 +194,73 @@ export default function DirectoryPage() {
                     </div>
                 </div>
 
-                {effectiveIsLoading ? (
+                {effectiveIsLoading && (!employees || employees.length === 0) ? (
                     <div className="flex items-center justify-center py-8">
                         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                         <p className="ml-2">Cargando directorio...</p>
                     </div>
                 ) : employees && employees.length > 0 ? (
                     <>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead className="w-[300px]">Nombre</TableHead>
-                                <TableHead>Cargo</TableHead>
-                                <TableHead className="hidden md:table-cell">Departamento</TableHead>
-                                <TableHead className="text-right">Contacto</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {employees.map((employee) => (
-                                <TableRow key={employee.id}>
-                                    <TableCell>
-                                        <div className="flex items-center gap-3">
-                                            <Avatar>
-                                                <AvatarImage src={employee.fotoUrl} alt={`${employee.nom} ${employee.cognom}`} />
-                                                <AvatarFallback>{employee.nom.charAt(0)}{employee.cognom.charAt(0)}</AvatarFallback>
-                                            </Avatar>
+                    <div className="relative">
+                        {effectiveIsLoading && (
+                          <div className="absolute inset-0 bg-background/50 flex items-center justify-center z-10">
+                            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                          </div>
+                        )}
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="w-[300px]">Nombre</TableHead>
+                                    <TableHead>Cargo</TableHead>
+                                    <TableHead className="hidden md:table-cell">Departamento</TableHead>
+                                    <TableHead className="text-right">Contacto</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {employees.map((employee) => (
+                                    <TableRow key={employee.id}>
+                                        <TableCell>
+                                            <div className="flex items-center gap-3">
+                                                <Avatar>
+                                                    <AvatarImage src={employee.fotoUrl} alt={`${employee.nom} ${employee.cognom}`} />
+                                                    <AvatarFallback>{employee.nom.charAt(0)}{employee.cognom.charAt(0)}</AvatarFallback>
+                                                </Avatar>
+                                                <div>
+                                                    <p className="font-medium">{employee.nom} {employee.cognom}</p>
+                                                    <a href={`mailto:${employee.email}`} className="text-sm text-muted-foreground hover:text-primary">
+                                                        {employee.email}
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
                                             <div>
-                                                <p className="font-medium">{employee.nom} {employee.cognom}</p>
-                                                <a href={`mailto:${employee.email}`} className="text-sm text-muted-foreground hover:text-primary">
-                                                    {employee.email}
+                                                <p className="font-medium">{employee.carrec}</p>
+                                                <p className="text-sm text-muted-foreground">{employee.descripcioCarrec}</p>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="hidden md:table-cell">
+                                            <Badge variant="secondary">{employee.departament}</Badge>
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <div className="flex flex-col items-end gap-1">
+                                                {employee.telefons?.[0] && (
+                                                    <a href={`tel:${employee.telefons[0]}`} className="flex items-center justify-end gap-2 text-muted-foreground hover:text-primary">
+                                                        <Phone className="h-4 w-4" />
+                                                        <span>{employee.telefons[0]}</span>
+                                                    </a>
+                                                )}
+                                                <a href={`mailto:${employee.email}`} className="flex items-center justify-end gap-2 text-muted-foreground hover:text-primary">
+                                                    <Mail className="h-4 w-4" />
+                                                    <span>Email</span>
                                                 </a>
                                             </div>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div>
-                                            <p className="font-medium">{employee.carrec}</p>
-                                            <p className="text-sm text-muted-foreground">{employee.descripcioCarrec}</p>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell className="hidden md:table-cell">
-                                        <Badge variant="secondary">{employee.departament}</Badge>
-                                    </TableCell>
-                                     <TableCell className="text-right">
-                                        <div className="flex flex-col items-end gap-1">
-                                            {employee.telefons?.[0] && (
-                                                <a href={`tel:${employee.telefons[0]}`} className="flex items-center justify-end gap-2 text-muted-foreground hover:text-primary">
-                                                    <Phone className="h-4 w-4" />
-                                                     <span>{employee.telefons[0]}</span>
-                                                </a>
-                                            )}
-                                            <a href={`mailto:${employee.email}`} className="flex items-center justify-end gap-2 text-muted-foreground hover:text-primary">
-                                                <Mail className="h-4 w-4" />
-                                                <span>Email</span>
-                                            </a>
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
                      <div className="flex justify-end items-center gap-2 pt-4">
                         <Button
                             variant="outline"
