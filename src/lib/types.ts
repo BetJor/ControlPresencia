@@ -49,3 +49,10 @@ export type PunchWithDetails = Punch & {
   incident?: Incident;
   dailyPunchCount: number;
 };
+
+export type UsuariDins = {
+  id: string; // P_CI
+  nom: string;
+  cognoms: string;
+  horaDarreraEntrada: Timestamp;
+};
