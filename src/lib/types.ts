@@ -1,3 +1,5 @@
+import { Timestamp } from "firebase/firestore";
+
 export type Employee = {
   id: string;
   name: string;
@@ -12,6 +14,13 @@ export type Visitor = {
   company: string;
   timestamp: Date;
 };
+
+export type VisitRegistration = {
+    id: string;
+    name: string;
+    company: string;
+    timestamp: Timestamp;
+}
 
 export type Terminal = {
   id: string;
@@ -30,7 +39,7 @@ export type Punch = {
   employeeId: string;
   terminalId: string;
   incidentId?: string;
-  timestamp: Date;
+  timestamp: Timestamp;
   isManual?: boolean;
 };
 
