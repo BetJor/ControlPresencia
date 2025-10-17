@@ -23,7 +23,6 @@ const navItems = [
   { href: '/dashboard', icon: Home, label: 'Panel' },
   { href: '/employees', icon: Users, label: 'Empleados' },
   { href: '/visitors', icon: Contact, label: 'Visitas' },
-  { href: '/terminals', icon: Computer, label: 'Terminales' },
   { href: '/incidents', icon: AlertTriangle, label: 'Incidencias' },
 ];
 

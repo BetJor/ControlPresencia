@@ -62,10 +62,6 @@ export default function Header() {
               <Contact className="h-5 w-5" />
               Visitas
             </Link>
-            <Link href="/terminals" className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground">
-              <Computer className="h-5 w-5" />
-              Terminales
-            </Link>
              <Link href="/incidents" className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground">
               <AlertTriangle className="h-5 w-5" />
               Incidencias
