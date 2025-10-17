@@ -41,23 +41,20 @@ export default function DirectoryPage() {
     const directoriQuery = useMemoFirebase(() => {
         if (!firestore) return null;
 
-        const baseCollection = collection(firestore, 'directori');
-        const conditions = [];
+        let q = query(collection(firestore, 'directori'));
 
         if (departmentFilter) {
-            conditions.push(where('departament', '==', departmentFilter));
+            q = query(q, where('departament', '==', departmentFilter));
         }
         
         const nameFilterLower = nameFilter.toLowerCase().trim();
         if (nameFilterLower) {
             const nameEnd = nameFilterLower + '\uf8ff';
-            conditions.push(where('nom', '>=', nameFilterLower));
-            conditions.push(where('nom', '<=', nameEnd));
+            q = query(q, where('nom', '>=', nameFilterLower), where('nom', '<=', nameEnd));
         }
 
-        const q = query(
-            baseCollection, 
-            ...conditions, 
+        q = query(
+            q, 
             orderBy('nom'), 
             startAfter(paginationCursors[currentPage] || null),
             limit(PAGE_SIZE + 1)
