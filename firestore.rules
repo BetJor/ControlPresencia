@@ -1,184 +1,148 @@
+/**
+ * @file Firestore Security Rules
+ * @description This ruleset enforces a role-based access control model with owner-only restrictions for user data.
+ *
+ * Data Structure:
+ * - /users/{userId}: Stores user profiles, with 'role' denormalized for efficient authorization.
+ * - /attendance_records/{attendanceRecordId}: Stores attendance records.
+ * - /terminals/{terminalId}: Stores terminal information.
+ * - /incident_types/{incidentTypeId}: Stores incident types.
+ * - /employees/{employeeId}: Stores employee information.
+ * - /visit_registrations/{visitRegistrationId}: Stores visit registration information.
+ * - /favorite_visitors/{favoriteVisitorId}: Stores favorite visitor information.
+ * - /usuaris_dins/{usuariId}: Stores a list of users currently in the office.
+ * - /directori/{directoriId}: Stores employee directory information.
+ *
+ * Key Security Decisions:
+ * - Users can only read and write their own user document.
+ * - The `usuaris_dins` collection is publicly readable by any signed-in user.
+ * - The `directori` collection is publicly readable by any signed-in user.
+ * - Write access to all collections other than `/users/{userId}` is not explicitly granted in this prototype.
+ *
+ * Denormalization for Authorization:
+ * - User roles are denormalized into the `/users/{userId}` document to avoid extra `get()` calls in rules.
+ *
+ * Structural Segregation:
+ * - Different data types (user profiles, attendance records, etc.) are stored in separate collections.
+ */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Secure access to user profiles. Only the user themselves can read/write their profile.
+     * @description Allows users to read and write their own user profile.
      * @path /users/{userId}
-     * @allow (create) User with UID 'user123' can create their profile at /users/user123.
-     * @allow (get, update, delete) User with UID 'user123' can read, update, and delete their profile at /users/user123.
-     * @deny (get, update, delete) User with UID 'user456' cannot read, update, or delete the profile at /users/user123.
-     * @principle Enforces document ownership for user profiles.
+     * @allow (create) User with matching UID can create their profile.
+     * @allow (get, update, delete) User with matching UID can access and modify their profile.
+     * @deny (create) User cannot create a profile with a mismatched UID.
+     * @deny (get, update, delete) User cannot access or modify another user's profile.
+     * @principle Enforces user-ownership for profile data.
      */
     match /users/{userId} {
       function isOwner(userId) {
-        return request.auth.uid == userId;
+        return request.auth != null && request.auth.uid == userId;
       }
 
-      function isSignedIn() {
-        return request.auth != null;
+      function isExistingOwner(userId) {
+        return isOwner(userId) && resource != null;
       }
 
       allow get: if isOwner(userId);
       allow list: if false;
-      allow create: if isSignedIn() && isOwner(userId);
-      allow update: if isSignedIn() && isOwner(userId);
-      allow delete: if isSignedIn() && isOwner(userId);
+
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
+      allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Controls access to attendance records.
-     * @path /attendance_records/{attendanceRecordId}
-     * @allow (create) Authenticated user can create an attendance record.
-     * @allow (get, list) Any authenticated user can read attendance records.
-     * @deny (update, delete) No one can update or delete attendance records in this prototype.
-     * @principle Public read, owner-only writes with validation.
-     */
-    match /attendance_records/{attendanceRecordId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if false;
-      allow delete: if false;
-    }
-
-    /**
-     * @description Controls access to terminal information.
-     * @path /terminals/{terminalId}
-     * @allow (get, list) Any authenticated user can read terminal information.
-     * @deny (create, update, delete) No one can create, update, or delete terminals in this prototype.
-     * @principle Public read, owner-only writes with validation.
-     */
-    match /terminals/{terminalId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
-    }
-
-    /**
-     * @description Controls access to incident types.
-     * @path /incident_types/{incidentTypeId}
-     * @allow (get, list) Any authenticated user can read incident types.
-     * @deny (create, update, delete) No one can create, update, or delete incident types in this prototype.
-     * @principle Public read, owner-only writes with validation.
-     */
-    match /incident_types/{incidentTypeId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
-    }
-
-    /**
-     * @description Controls access to employee information.
-     * @path /employees/{employeeId}
-     * @allow (get, list) Any authenticated user can read employee information.
-     * @deny (create, update, delete) No one can create, update, or delete employees in this prototype.
-     * @principle Public read, owner-only writes with validation.
-     */
-    match /employees/{employeeId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
-    }
-
-    /**
-     * @description Controls access to visit registration information.
-     * @path /visit_registrations/{visitRegistrationId}
-     * @allow (create) Any authenticated user can create visit registration data.
-     * @allow (get, list) Any authenticated user can read visit registration data.
-     * @deny (update, delete) No one can update or delete visit registration data in this prototype.
-     * @principle Public read, owner-only writes with validation.
-     */
-    match /visit_registrations/{visitRegistrationId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if false;
-      allow delete: if false;
-    }
-
-    /**
-     * @description Controls access to favorite visitor information.
-     * @path /favorite_visitors/{favoriteVisitorId}
-     * @allow (create) Any authenticated user can create favorite visitor data.
-     * @allow (get, list) Any authenticated user can read favorite visitor data.
-     * @deny (update, delete) No one can update or delete favorite visitor data in this prototype.
-     * @principle Public read, owner-only writes with validation.
-     */
-    match /favorite_visitors/{favoriteVisitorId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if false;
-      allow delete: if false;
-    }
-
-    /**
-     * @description Controls access to users currently in the office (whiteboard).
+     * @description Allows anyone to read the list of present users, while write permissions are not granted in this prototype.
      * @path /usuaris_dins/{usuariId}
-     * @allow (get, list) Any authenticated user can read who is currently in the office.
-     * @deny (create, update, delete) No one can create, update, or delete this data via client.
-     * @principle Public read for authenticated users, backend-only writes.
+     * @allow (get, list) Any signed-in user can view the whiteboard of present users.
+     * @deny (create, update, delete) No one is allowed to create, update, or delete entries.
+     * @principle Public read access for a presence whiteboard, with backend-only writes.
      */
     match /usuaris_dins/{usuariId} {
       function isSignedIn() {
         return request.auth != null;
       }
-
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow get, list: if isSignedIn();
+      allow create, update, delete: if false;
     }
 
-    /**
-     * @description Controls access to the employee directory.
+        /**
+     * @description Allows anyone to read the employee directory, while write permissions are not granted in this prototype.
      * @path /directori/{directoriId}
-     * @allow (get, list) Any authenticated user can read the employee directory.
-     * @deny (create, update, delete) No one can create, update, or delete employee directory entries in this prototype.
-     * @principle Public read, owner-only writes with validation.
+     * @allow (get, list) Any signed-in user can view the employee directory.
+     * @deny (create, update, delete) No one is allowed to create, update, or delete entries.
+     * @principle Public read access for a directory, with backend-only writes.
      */
     match /directori/{directoriId} {
       function isSignedIn() {
         return request.auth != null;
       }
+      allow get, list: if isSignedIn();
+      allow create, update, delete: if false;
+    }
 
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+    /**
+     * @description Read and write rules are not granted for attendance records in this prototype.
+     * @path /attendance_records/{attendanceRecordId}
+     * @deny (get, list, create, update, delete) No one is allowed to read or write attendance records.
+     * @principle Data is secured until proper access control is implemented.
+     */
+    match /attendance_records/{attendanceRecordId} {
+      allow get, list, create, update, delete: if false;
+    }
+
+    /**
+     * @description Read and write rules are not granted for terminals in this prototype.
+     * @path /terminals/{terminalId}
+     * @deny (get, list, create, update, delete) No one is allowed to read or write terminal data.
+     * @principle Data is secured until proper access control is implemented.
+     */
+    match /terminals/{terminalId} {
+      allow get, list, create, update, delete: if false;
+    }
+
+    /**
+     * @description Read and write rules are not granted for incident types in this prototype.
+     * @path /incident_types/{incidentTypeId}
+     * @deny (get, list, create, update, delete) No one is allowed to read or write incident type data.
+     * @principle Data is secured until proper access control is implemented.
+     */
+    match /incident_types/{incidentTypeId} {
+      allow get, list, create, update, delete: if false;
+    }
+
+    /**
+     * @description Read and write rules are not granted for employees in this prototype.
+     * @path /employees/{employeeId}
+     * @deny (get, list, create, update, delete) No one is allowed to read or write employee data.
+     * @principle Data is secured until proper access control is implemented.
+     */
+    match /employees/{employeeId} {
+      allow get, list, create, update, delete: if false;
+    }
+
+    /**
+     * @description Read and write rules are not granted for visit registrations in this prototype.
+     * @path /visit_registrations/{visitRegistrationId}
+     * @deny (get, list, create, update, delete) No one is allowed to read or write visit registration data.
+     * @principle Data is secured until proper access control is implemented.
+     */
+    match /visit_registrations/{visitRegistrationId} {
+      allow get, list, create, update, delete: if false;
+    }
+
+    /**
+     * @description Read and write rules are not granted for favorite visitors in this prototype.
+     * @path /favorite_visitors/{favoriteVisitorId}
+     * @deny (get, list, create, update, delete) No one is allowed to read or write favorite visitor data.
+     * @principle Data is secured until proper access control is implemented.
+     */
+    match /favorite_visitors/{favoriteVisitorId} {
+      allow get, list, create, update, delete: if false;
     }
   }
 }
