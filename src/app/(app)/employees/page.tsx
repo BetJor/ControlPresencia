@@ -9,6 +9,7 @@ import { Loader2, BookUser, Mail, Phone, Search } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Directori } from "@/lib/types";
 
 
@@ -24,12 +25,18 @@ export default function DirectoryPage() {
 
     const { data: employees, isLoading } = useCollection<Directori>(directoriCollection);
 
+    const departments = useMemo(() => {
+        if (!employees) return [];
+        const allDepartments = employees.map(employee => employee.departament).filter(Boolean);
+        return [...new Set(allDepartments)].sort();
+    }, [employees]);
+
     const filteredEmployees = useMemo(() => {
         if (!employees) return [];
         return employees.filter(employee => {
             const fullName = `${employee.nom} ${employee.cognom}`.toLowerCase();
             const nameMatch = nameFilter ? fullName.includes(nameFilter.toLowerCase()) : true;
-            const departmentMatch = departmentFilter ? employee.departament.toLowerCase().includes(departmentFilter.toLowerCase()) : true;
+            const departmentMatch = departmentFilter ? employee.departament === departmentFilter : true;
             return nameMatch && departmentMatch;
         });
     }, [employees, nameFilter, departmentFilter]);
@@ -44,7 +51,7 @@ export default function DirectoryPage() {
                 <CardDescription>Busca y contacta con los empleados de la organización.</CardDescription>
             </CardHeader>
             <CardContent>
-                <div className="flex items-center gap-4 mb-6">
+                <div className="flex flex-col md:flex-row items-center gap-4 mb-6">
                     <div className="relative w-full md:w-1/2">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input
@@ -54,14 +61,18 @@ export default function DirectoryPage() {
                             className="pl-10"
                         />
                     </div>
-                     <div className="relative w-full md:w-1/2">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                            placeholder="Filtrar por departamento..."
-                            value={departmentFilter}
-                            onChange={(e) => setDepartmentFilter(e.target.value)}
-                            className="pl-10"
-                        />
+                     <div className="w-full md:w-1/2">
+                        <Select value={departmentFilter} onValueChange={(value) => setDepartmentFilter(value === 'all' ? '' : value)}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Filtrar por departamento..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">Todos los departamentos</SelectItem>
+                                {departments.map(dep => (
+                                    <SelectItem key={dep} value={dep}>{dep}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
                 </div>
 
@@ -109,12 +120,12 @@ export default function DirectoryPage() {
                                      <TableCell className="text-right">
                                         <div className="flex flex-col items-end gap-1">
                                             {employee.telefons?.[0] && (
-                                                <a href={`tel:${employee.telefons[0]}`} className="flex items-center gap-2 text-muted-foreground hover:text-primary">
+                                                <a href={`tel:${employee.telefons[0]}`} className="flex items-center justify-end gap-2 text-muted-foreground hover:text-primary">
                                                     <Phone className="h-4 w-4" />
                                                     <span>{employee.telefons[0]}</span>
                                                 </a>
                                             )}
-                                            <a href={`mailto:${employee.email}`} className="flex items-center gap-2 text-muted-foreground hover:text-primary">
+                                            <a href={`mailto:${employee.email}`} className="flex items-center justify-end gap-2 text-muted-foreground hover:text-primary">
                                                 <Mail className="h-4 w-4" />
                                                 <span>Email</span>
                                             </a>
