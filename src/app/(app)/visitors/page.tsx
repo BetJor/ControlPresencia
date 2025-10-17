@@ -55,8 +55,8 @@ export default function VisitorsPage() {
                     </Table>
                 ) : (
                     <div className="text-center text-muted-foreground py-8">
-                        <p>No tienes ninguna visita guardada como favorita todavía.</p>
-                        <p className="text-sm">Puedes añadirlas desde la sección de Recepción en el Panel.</p>
+                        <p>Aún no tienes ninguna visita guardada como favorita.</p>
+                        <p className="text-sm">Puedes añadirlas desde la sección de Recepción en el Panel al registrar una nueva visita.</p>
                     </div>
                 )}
             </CardContent>

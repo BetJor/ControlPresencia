@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import {
   CardDescription,
   CardHeader,
+  CardTitle
 } from '@/components/ui/card';
 import {
     Accordion,
@@ -17,21 +18,38 @@ import { Contact, Edit, Fingerprint, UserPlus, Check, ChevronsUpDown, Star } fro
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
-import { Card, CardTitle } from "@/components/ui/card";
-import { useFirestore, useUser, addDocumentNonBlocking } from "@/firebase";
+import { Card } from "@/components/ui/card";
+import { useFirestore, useUser, addDocumentNonBlocking, useCollection, useMemoFirebase } from "@/firebase";
 import { collection, serverTimestamp } from "firebase/firestore";
+import { Loader2 } from "lucide-react";
+
+type FavoriteVisitor = {
+    id: string;
+    name: string;
+    company: string;
+};
 
 export default function PunchClock() {
   const { toast } = useToast();
-  const [open, setOpen] = React.useState(false)
-  const [value, setValue] = React.useState("")
+  const [employeeOpen, setEmployeeOpen] = React.useState(false);
+  const [employeeValue, setEmployeeValue] = React.useState("");
+
+  const [visitorOpen, setVisitorOpen] = React.useState(false);
   const [visitorName, setVisitorName] = React.useState("");
   const [visitorCompany, setVisitorCompany] = React.useState("");
   const [isFavorite, setIsFavorite] = React.useState(false);
+
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
+  
+  const favoriteVisitorsCollection = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'favorite_visitors');
+  }, [firestore]);
+
+  const { data: favoriteVisitors, isLoading: favoritesLoading } = useCollection<FavoriteVisitor>(favoriteVisitorsCollection);
 
   const handleManualPunch = () => {
     toast({
@@ -60,11 +78,18 @@ export default function PunchClock() {
         addDocumentNonBlocking(collection(firestore, 'visit_registrations'), visitData);
 
         if (isFavorite) {
-          const favoriteVisitorData = {
-            name: visitorName,
-            company: visitorCompany,
-          };
-          addDocumentNonBlocking(collection(firestore, 'favorite_visitors'), favoriteVisitorData);
+          // Check if the visitor is already a favorite to avoid duplicates
+          const isAlreadyFavorite = favoriteVisitors?.some(
+            (fav) => fav.name.toLowerCase() === visitorName.toLowerCase() && fav.company.toLowerCase() === visitorCompany.toLowerCase()
+          );
+
+          if (!isAlreadyFavorite) {
+              const favoriteVisitorData = {
+                name: visitorName,
+                company: visitorCompany,
+              };
+              addDocumentNonBlocking(collection(firestore, 'favorite_visitors'), favoriteVisitorData);
+          }
         }
 
         toast({
@@ -84,6 +109,8 @@ export default function PunchClock() {
         });
     }
   }
+
+  const isLoading = isUserLoading || favoritesLoading;
 
   return (
     <Card>
@@ -109,17 +136,17 @@ export default function PunchClock() {
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="grid gap-2">
                                     <Label htmlFor="employee-search">Empleado</Label>
-                                    <Popover open={open} onOpenChange={setOpen}>
+                                    <Popover open={employeeOpen} onOpenChange={setEmployeeOpen}>
                                         <PopoverTrigger asChild>
                                         <Button
                                             variant="outline"
                                             role="combobox"
-                                            aria-expanded={open}
+                                            aria-expanded={employeeOpen}
                                             className="w-full justify-between"
-                                            disabled={isUserLoading}
+                                            disabled={isLoading}
                                         >
-                                            {value
-                                            ? mockEmployees.find((employee) => `${employee.name.toLowerCase()} ${employee.cognoms.toLowerCase()}` === value)?.name + ' ' + mockEmployees.find((employee) => `${employee.name.toLowerCase()} ${employee.cognoms.toLowerCase()}` === value)?.cognoms
+                                            {employeeValue
+                                            ? mockEmployees.find((employee) => `${employee.name.toLowerCase()} ${employee.cognoms.toLowerCase()}` === employeeValue)?.name + ' ' + mockEmployees.find((employee) => `${employee.name.toLowerCase()} ${employee.cognoms.toLowerCase()}` === employeeValue)?.cognoms
                                             : "Seleccionar empleado..."}
                                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                         </Button>
@@ -134,14 +161,14 @@ export default function PunchClock() {
                                                 key={employee.id}
                                                 value={`${employee.name.toLowerCase()} ${employee.cognoms.toLowerCase()}`}
                                                 onSelect={(currentValue) => {
-                                                    setValue(currentValue === value ? "" : currentValue)
-                                                    setOpen(false)
+                                                    setEmployeeValue(currentValue === employeeValue ? "" : currentValue)
+                                                    setEmployeeOpen(false)
                                                 }}
                                                 >
                                                 <Check
                                                     className={cn(
                                                     "mr-2 h-4 w-4",
-                                                    value === `${employee.name.toLowerCase()} ${employee.cognoms.toLowerCase()}` ? "opacity-100" : "opacity-0"
+                                                    employeeValue === `${employee.name.toLowerCase()} ${employee.cognoms.toLowerCase()}` ? "opacity-100" : "opacity-0"
                                                     )}
                                                 />
                                                 {employee.name} {employee.cognoms}
@@ -154,7 +181,7 @@ export default function PunchClock() {
                                 </div>
                                 <div className='grid gap-2'>
                                     <Label>&nbsp;</Label>
-                                    <Button onClick={handleManualPunch} className='w-full' disabled={isUserLoading}>
+                                    <Button onClick={handleManualPunch} className='w-full' disabled={isLoading}>
                                         Registrar Entrada
                                     </Button>
                                 </div>
@@ -164,23 +191,86 @@ export default function PunchClock() {
                             {/* Visitor Entry */}
                             <div>
                                 <h3 className="mb-2 font-medium flex items-center gap-2"><Contact className='h-5 w-5' /> Entrada de Visita</h3>
+                                {isLoading ? (
+                                     <div className="flex items-center justify-center p-4">
+                                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                                        <p className="ml-2">Cargando favoritos...</p>
+                                     </div>
+                                ) : (
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div className="grid gap-2">
-                                        <Label htmlFor='visitor-name'>Nombre Visita</Label>
-                                        <Input id='visitor-name' placeholder="Nombre completo" value={visitorName} onChange={(e) => setVisitorName(e.target.value)} disabled={isUserLoading}/>
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor='visitor-company'>Empresa</Label>
-                                        <div className="flex items-center gap-2">
-                                            <Input id='visitor-company' placeholder="Nombre de la empresa" className="w-full" value={visitorCompany} onChange={(e) => setVisitorCompany(e.target.value)} disabled={isUserLoading}/>
-                                            <Button variant="outline" size="icon" onClick={() => setIsFavorite(!isFavorite)} disabled={isUserLoading}>
-                                                <Star className={cn("h-4 w-4", isFavorite ? "fill-primary text-primary" : "")} />
-                                            </Button>
-                                        </div>
+                                    <div className="grid gap-2 col-span-2">
+                                        <Label htmlFor='visitor-name'>Visitante</Label>
+                                        <Popover open={visitorOpen} onOpenChange={setVisitorOpen}>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant="outline"
+                                                    role="combobox"
+                                                    aria-expanded={visitorOpen}
+                                                    className="w-full justify-between"
+                                                    disabled={isLoading}
+                                                >
+                                                    {visitorName ? `${visitorName} (${visitorCompany})` : "Seleccionar o añadir visitante..."}
+                                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-full p-0">
+                                                <Command filter={(value, search) => {
+                                                    const favorite = favoriteVisitors?.find(fav => fav.id === value);
+                                                    if (favorite) {
+                                                        const combinedText = `${favorite.name} ${favorite.company}`.toLowerCase();
+                                                        return combinedText.includes(search.toLowerCase()) ? 1 : 0;
+                                                    }
+                                                    return 0;
+                                                }}>
+                                                    <CommandInput 
+                                                        placeholder="Buscar visitante o añadir nuevo..." 
+                                                        value={visitorName}
+                                                        onValueChange={setVisitorName}
+                                                    />
+                                                    <CommandList>
+                                                        <CommandEmpty>
+                                                          <div className="p-4">
+                                                            <p className="text-sm text-center mb-2">No se encontró el visitante.</p>
+                                                            <Input 
+                                                                placeholder="Empresa"
+                                                                value={visitorCompany}
+                                                                onChange={(e) => setVisitorCompany(e.target.value)}
+                                                                className="w-full"
+                                                            />
+                                                          </div>
+                                                        </CommandEmpty>
+                                                        <CommandGroup>
+                                                        {favoriteVisitors?.map((visitor) => (
+                                                            <CommandItem
+                                                                key={visitor.id}
+                                                                value={visitor.id}
+                                                                onSelect={() => {
+                                                                    setVisitorName(visitor.name);
+                                                                    setVisitorCompany(visitor.company);
+                                                                    setVisitorOpen(false);
+                                                                }}
+                                                            >
+                                                                <Check className={cn("mr-2 h-4 w-4", visitorName === visitor.name ? "opacity-100" : "opacity-0")} />
+                                                                {visitor.name} ({visitor.company})
+                                                            </CommandItem>
+                                                        ))}
+                                                        </CommandGroup>
+                                                    </CommandList>
+                                                </Command>
+                                            </PopoverContent>
+                                        </Popover>
                                     </div>
                                 </div>
+                                )}
+
                                 <div className="flex items-center gap-4 mt-4">
-                                    <Button onClick={handleVisitorEntry} className='w-full' disabled={isUserLoading}>
+                                     <div className="flex items-center space-x-2">
+                                        <Button variant="ghost" size="sm" onClick={() => setIsFavorite(!isFavorite)} disabled={isLoading || !visitorName}>
+                                            <Star className={cn("h-4 w-4", isFavorite ? "fill-primary text-primary" : "text-muted-foreground")} />
+                                            <span className="ml-2">Guardar como favorito</span>
+                                        </Button>
+                                    </div>
+                                    <Button onClick={handleVisitorEntry} className='w-full' disabled={isLoading || !visitorName || !visitorCompany}>
                                         <UserPlus className='mr-2'/>
                                         Registrar Visita
                                     </Button>
