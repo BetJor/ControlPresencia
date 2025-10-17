@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import {
   CardDescription,
   CardHeader,
-  CardTitle,
 } from '@/components/ui/card';
 import {
     Accordion,
@@ -20,8 +19,8 @@ import { Label } from '../ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
-import { Card } from "@/components/ui/card";
-import { useFirestore, addDocumentNonBlocking, useUser } from "@/firebase";
+import { Card, CardTitle } from "@/components/ui/card";
+import { useFirestore, useUser, addDocumentNonBlocking } from "@/firebase";
 import { collection, serverTimestamp } from "firebase/firestore";
 
 export default function PunchClock() {
