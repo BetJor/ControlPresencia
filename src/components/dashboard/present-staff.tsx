@@ -41,7 +41,7 @@ export default async function PresentStaff() {
       <CardHeader className="pb-4">
         <CardTitle className="font-headline flex items-center gap-2">
             <Users className="h-6 w-6" />
-            Staff on Site
+            Personal Presente
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -55,10 +55,10 @@ export default async function PresentStaff() {
             ))}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">No staff currently on site.</p>
+          <p className="text-sm text-muted-foreground">No hay personal en el sitio actualmente.</p>
         )}
         <p className="mt-2 text-sm text-muted-foreground">
-            <span className="font-bold text-foreground">{presentStaff.length}</span> out of {mockEmployees.length} employees are currently present.
+            <span className="font-bold text-foreground">{presentStaff.length}</span> de {mockEmployees.length} empleados están presentes actualmente.
         </p>
       </CardContent>
     </Card>

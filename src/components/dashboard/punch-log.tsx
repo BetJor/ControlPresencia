@@ -54,21 +54,21 @@ export default function PunchLog() {
       <CardHeader>
         <CardTitle className='font-headline flex items-center gap-2'>
             <List className="h-6 w-6"/>
-            Today's Punch Registry
+            Registro de Fichajes de Hoy
         </CardTitle>
         <CardDescription>
-          A real-time log of all employee entries and exits for the day.
+          Un registro en tiempo real de todas las entradas y salidas de empleados del día.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Cognoms</TableHead>
-              <TableHead className="hidden sm:table-cell">Name</TableHead>
-              <TableHead>Data</TableHead>
+              <TableHead>Apellidos</TableHead>
+              <TableHead className="hidden sm:table-cell">Nombre</TableHead>
+              <TableHead>Hora</TableHead>
               <TableHead className="hidden md:table-cell">Terminal</TableHead>
-              <TableHead className="text-right">Registry Count</TableHead>
+              <TableHead className="text-right">Fichajes</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

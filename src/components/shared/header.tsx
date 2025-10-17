@@ -37,7 +37,7 @@ export default function Header() {
         <SheetTrigger asChild>
           <Button size="icon" variant="outline" className="sm:hidden">
             <PanelLeft className="h-5 w-5" />
-            <span className="sr-only">Toggle Menu</span>
+            <span className="sr-only">Abrir Menú</span>
           </Button>
         </SheetTrigger>
         <SheetContent side="left" className="sm:max-w-xs">
@@ -51,23 +51,23 @@ export default function Header() {
             </Link>
             <Link href="/dashboard" className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground">
               <Home className="h-5 w-5" />
-              Dashboard
+              Panel
             </Link>
             <Link href="/employees" className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground">
               <Users className="h-5 w-5" />
-              Employees
+              Empleados
             </Link>
             <Link href="/terminals" className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground">
               <Computer className="h-5 w-5" />
-              Terminals
+              Terminales
             </Link>
              <Link href="/incidents" className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground">
               <AlertTriangle className="h-5 w-5" />
-              Incidents
+              Incidencias
             </Link>
             <Link href="#" className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground">
               <Settings className="h-5 w-5" />
-              Settings
+              Ajustes
             </Link>
           </nav>
         </SheetContent>
@@ -76,7 +76,7 @@ export default function Header() {
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href="#">Dashboard</Link>
+              <Link href="#">Panel</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           {/* Example breadcrumb extension */}
@@ -109,13 +109,13 @@ export default function Header() {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuLabel>My Account</DropdownMenuLabel>
+          <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem>Settings</DropdownMenuItem>
-          <DropdownMenuItem>Support</DropdownMenuItem>
+          <DropdownMenuItem>Ajustes</DropdownMenuItem>
+          <DropdownMenuItem>Soporte</DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem asChild>
-            <Link href="/login">Logout</Link>
+            <Link href="/login">Cerrar sesión</Link>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

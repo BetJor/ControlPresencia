@@ -9,15 +9,15 @@ export const mockEmployees: Employee[] = [
 ];
 
 export const mockTerminals: Terminal[] = [
-  { id: 'T1', name: 'Main Entrance', location: 'Lobby' },
-  { id: 'T2', name: 'Warehouse Door', location: 'Loading Bay' },
-  { id: 'T3', name: 'Office Backdoor', location: 'Floor 2' },
+  { id: 'T1', name: 'Entrada Principal', location: 'Lobby' },
+  { id: 'T2', name: 'Puerta Almacén', location: 'Muelle de Carga' },
+  { id: 'T3', name: 'Puerta Trasera Oficina', location: 'Planta 2' },
 ];
 
 export const mockIncidents: Incident[] = [
-  { id: 'I1', code: 'LATE_IN', description: 'Arrived late' },
-  { id: 'I2', code: 'EARLY_OUT', description: 'Left early' },
-  { id: 'I3', code: 'FORGOT_PUNCH', description: 'Forgot to punch' },
+  { id: 'I1', code: 'LATE_IN', description: 'Llegó tarde' },
+  { id: 'I2', code: 'EARLY_OUT', description: 'Se fue pronto' },
+  { id: 'I3', code: 'FORGOT_PUNCH', description: 'Olvidó fichar' },
 ];
 
 const today = new Date();

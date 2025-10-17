@@ -19,10 +19,10 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
 const navItems = [
-  { href: '/dashboard', icon: Home, label: 'Dashboard' },
-  { href: '/employees', icon: Users, label: 'Employees' },
-  { href: '/terminals', icon: Computer, label: 'Terminals' },
-  { href: '/incidents', icon: AlertTriangle, label: 'Incidents' },
+  { href: '/dashboard', icon: Home, label: 'Panel' },
+  { href: '/employees', icon: Users, label: 'Empleados' },
+  { href: '/terminals', icon: Computer, label: 'Terminales' },
+  { href: '/incidents', icon: AlertTriangle, label: 'Incidencias' },
 ];
 
 export default function AppSidebar() {
@@ -67,10 +67,10 @@ export default function AppSidebar() {
                 className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground md:h-8 md:w-8"
               >
                 <Settings className="h-5 w-5" />
-                <span className="sr-only">Settings</span>
+                <span className="sr-only">Ajustes</span>
               </Link>
             </TooltipTrigger>
-            <TooltipContent side="right">Settings</TooltipContent>
+            <TooltipContent side="right">Ajustes</TooltipContent>
           </Tooltip>
         </nav>
       </TooltipProvider>

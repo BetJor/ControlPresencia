@@ -3,8 +3,8 @@ import AppSidebar from '@/components/shared/app-sidebar';
 import Header from '@/components/shared/header';
 
 export const metadata: Metadata = {
-  title: 'Clockwork Dashboard',
-  description: 'Real-time Attendance Tracking',
+  title: 'Panel de Clockwork',
+  description: 'Seguimiento de Asistencia en Tiempo Real',
 };
 
 export default function AppLayout({

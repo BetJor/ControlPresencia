@@ -24,8 +24,8 @@ export default function PunchClock() {
 
   const handlePunch = () => {
     toast({
-      title: 'Punch Recorded',
-      description: `Your punch at ${new Date().toLocaleTimeString()} has been successfully recorded.`,
+      title: 'Fichaje Registrado',
+      description: `Tu fichaje a las ${new Date().toLocaleTimeString()} ha sido registrado con éxito.`,
     });
   };
 
@@ -34,10 +34,10 @@ export default function PunchClock() {
       <CardHeader className="pb-3">
         <CardTitle className="font-headline flex items-center gap-2">
           <Clock className="h-6 w-6" />
-          Real-time Punch
+          Fichaje en Tiempo Real
         </CardTitle>
         <CardDescription className="max-w-lg text-balance leading-relaxed">
-          Select a terminal and optional incident to record your entry or exit.
+          Selecciona un terminal y una incidencia opcional para registrar tu entrada o salida.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
@@ -45,7 +45,7 @@ export default function PunchClock() {
           <div className="grid gap-2">
             <Select>
               <SelectTrigger>
-                <SelectValue placeholder="Select Terminal" />
+                <SelectValue placeholder="Seleccionar Terminal" />
               </SelectTrigger>
               <SelectContent>
                 {mockTerminals.map((terminal) => (
@@ -59,7 +59,7 @@ export default function PunchClock() {
           <div className="grid gap-2">
             <Select>
               <SelectTrigger>
-                <SelectValue placeholder="Select Incident (Optional)" />
+                <SelectValue placeholder="Seleccionar Incidencia (Opcional)" />
               </SelectTrigger>
               <SelectContent>
                 {mockIncidents.map((incident) => (
@@ -75,7 +75,7 @@ export default function PunchClock() {
       <CardFooter>
         <Button onClick={handlePunch}>
           <Fingerprint className="mr-2 h-4 w-4" />
-          Punch In / Out
+          Fichar
         </Button>
       </CardFooter>
     </Card>
