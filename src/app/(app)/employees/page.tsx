@@ -1,23 +1,38 @@
 'use client';
 
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
 import { collection } from "firebase/firestore";
-import { Loader2, BookUser, Mail, Phone } from "lucide-react";
+import { Loader2, BookUser, Mail, Phone, Search } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Input } from '@/components/ui/input';
 import type { Directori } from "@/lib/types";
 
 
 export default function DirectoryPage() {
     const firestore = useFirestore();
+    const [nameFilter, setNameFilter] = useState('');
+    const [departmentFilter, setDepartmentFilter] = useState('');
+
     const directoriCollection = useMemoFirebase(() => {
         if (!firestore) return null;
         return collection(firestore, 'directori');
     }, [firestore]);
 
     const { data: employees, isLoading } = useCollection<Directori>(directoriCollection);
+
+    const filteredEmployees = useMemo(() => {
+        if (!employees) return [];
+        return employees.filter(employee => {
+            const fullName = `${employee.nom} ${employee.cognom}`.toLowerCase();
+            const nameMatch = nameFilter ? fullName.includes(nameFilter.toLowerCase()) : true;
+            const departmentMatch = departmentFilter ? employee.departament.toLowerCase().includes(departmentFilter.toLowerCase()) : true;
+            return nameMatch && departmentMatch;
+        });
+    }, [employees, nameFilter, departmentFilter]);
 
     return (
         <Card>
@@ -29,12 +44,33 @@ export default function DirectoryPage() {
                 <CardDescription>Busca y contacta con los empleados de la organización.</CardDescription>
             </CardHeader>
             <CardContent>
+                <div className="flex items-center gap-4 mb-6">
+                    <div className="relative w-full md:w-1/2">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Buscar por nombre..."
+                            value={nameFilter}
+                            onChange={(e) => setNameFilter(e.target.value)}
+                            className="pl-10"
+                        />
+                    </div>
+                     <div className="relative w-full md:w-1/2">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Filtrar por departamento..."
+                            value={departmentFilter}
+                            onChange={(e) => setDepartmentFilter(e.target.value)}
+                            className="pl-10"
+                        />
+                    </div>
+                </div>
+
                 {isLoading ? (
                     <div className="flex items-center justify-center py-8">
                         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                         <p className="ml-2">Cargando directorio...</p>
                     </div>
-                ) : employees && employees.length > 0 ? (
+                ) : filteredEmployees.length > 0 ? (
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -45,7 +81,7 @@ export default function DirectoryPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {employees.map((employee) => (
+                            {filteredEmployees.map((employee) => (
                                 <TableRow key={employee.id}>
                                     <TableCell>
                                         <div className="flex items-center gap-3">
@@ -86,8 +122,14 @@ export default function DirectoryPage() {
                     </Table>
                 ) : (
                     <div className="text-center text-muted-foreground py-8">
-                        <p>El directorio está vacío.</p>
-                        <p className="text-sm">Añade empleados a la colección 'directori' en Firestore para verlos aquí.</p>
+                         {employees && employees.length > 0 ? (
+                            <p>No se han encontrado empleados que coincidan con la búsqueda.</p>
+                         ) : (
+                            <>
+                                <p>El directorio está vacío.</p>
+                                <p className="text-sm">Añade empleados a la colección 'directori' en Firestore para verlos aquí.</p>
+                            </>
+                         )}
                     </div>
                 )}
             </CardContent>

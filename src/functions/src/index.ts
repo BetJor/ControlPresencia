@@ -23,7 +23,7 @@ exports.importarUsuarisAGoogleWorkspace = functions
         ],
       });
       const authClient = await auth.getClient();
-      google.options({ auth: authClient });
+      google.options({ auth: authClient as any }); // Cast to any to avoid complex type issues
 
       const admin = google.admin('directory_v1');
       const db = getFirestore();
@@ -33,13 +33,13 @@ exports.importarUsuarisAGoogleWorkspace = functions
 
       // 1. Obtenir tots els usuaris de Google Workspace (amb paginació)
       do {
-        const response = await admin.users.list({
+        const response: any = await admin.users.list({
           customer: 'my_customer',
           maxResults: 500, // Pots demanar fins a 500 per pàgina
           projection: 'full',
           viewType: 'domain_public',
           orderBy: 'email',
-          pageToken: nextPageToken,
+          pageToken: nextPageToken || undefined, // Send undefined if nextPageToken is null
         });
 
         if (response.data.users) {
@@ -95,8 +95,13 @@ exports.importarUsuarisAGoogleWorkspace = functions
 
         let telefons: string[] = [];
         if (user.phones && user.phones.length > 0) {
-          const phoneValues = user.phones.map((p: any) => p.value.trim());
-          telefons = [...new Set(phoneValues)]; // Converteix a Set per eliminar duplicats i torna a array
+          const phoneSet = new Set<string>();
+          for (const p of user.phones) {
+            if (p && typeof p.value === 'string' && p.value.length > 0) {
+              phoneSet.add(p.value.trim());
+            }
+          }
+          telefons = [...phoneSet];
         }
 
         const responsable =
