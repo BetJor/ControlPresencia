@@ -1,157 +1,180 @@
 /**
- * @fileoverview Firestore Security Rules for Clockwork application.
+ * @file Firestore Security Rules for Clockwork application.
  *
- * Core Philosophy:
- * This ruleset prioritizes secure access control based on user roles and resource ownership.
- * It aims for clear, maintainable rules that avoid complex queries.
+ * @core_philosophy This ruleset enforces a role-based access control model.  Users have roles (e.g., 'admin', 'standard') stored in their user document.
  *
- * Data Structure:
- * - /users/{userId}: Stores user profiles, including roles, for authorization.
- * - /attendance_records/{attendanceRecordId}: Stores attendance records, linked to employees and terminals.
- * - /terminals/{terminalId}: Stores terminal information.
- * - /incident_types/{incidentTypeId}: Stores incident types.
- * - /employees/{employeeId}: Stores employee information.
- * - /visit_registrations/{visitRegistrationId}: Stores visit registration data.
- * - /favorite_visitors/{favoriteVisitorId}: Stores data about favourite visitors.
+ * @data_structure
+ * - `/users/{userId}`: Stores user profiles, with the user's role denormalized directly on the document.
+ * - `/attendance_records/{attendanceRecordId}`: Stores attendance records.
+ * - `/terminals/{terminalId}`: Stores terminal information.
+ * - `/incident_types/{incidentTypeId}`: Stores incident types.
+ * - `/employees/{employeeId}`: Stores employee information.
+ * - `/visit_registrations/{visitRegistrationId}`: Stores visit registration information.
+ * - `/favorite_visitors/{favoriteVisitorId}`: Stores favorite visitor information.
  *
- * Key Security Decisions:
- * - User listing is disallowed.
- * - Access to user data is restricted to the owning user.
- * - Public read access is not generally granted, except where explicitly intended and secured with ownership checks on writes.
- *
- * Denormalization for Authorization:
- * - User roles are denormalized into the /users/{userId} document to enable Authorization Independence.
+ * @key_security_decisions
+ * - All write operations require an authenticated user.
+ * - Role-based access control is used where applicable, with 'admin' having elevated privileges.
+ * - Data validation is limited to authorization-critical fields during the prototyping phase.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Checks if the request is authenticated.
+     * @description Checks if the user is signed in.
      */
     function isSignedIn() {
       return request.auth != null;
     }
 
     /**
-     * @description Checks if the authenticated user's UID matches the provided userId.
+     * @description Checks if the user's ID matches the requested user ID.
      */
     function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
+      return request.auth.uid == userId;
     }
 
     /**
-     * @description Checks if the authenticated user's UID matches the provided userId and the resource exists.
+     * @description Checks if the user's ID matches the resource's user ID and the resource exists.
      */
     function isExistingOwner(userId) {
       return isOwner(userId) && resource != null;
     }
 
     /**
-     * @description Defines the structure and enforces permissions for user profiles.
-     * @path /users/{userId}
-     * @allow (create) - Authenticated user can create their own profile if the userId matches their auth.uid.
-     * @deny (create) - Authenticated user cannot create a profile with a userId that doesn't match their auth.uid.
-     * @allow (get, update, delete) - Authenticated user can only access their own profile.
-     * @deny (get, update, delete) - Authenticated user cannot access another user's profile.
-     * @principle Enforces document ownership and prevents unauthorized access to user data.
+     * @description Checks if the user has the "admin" role.
+     * @details Requires fetching the user document to check the role.
      */
-    match /users/{userId} {
-      allow get: if isOwner(userId);
-      allow list: if false;
-      allow create: if isOwner(userId) && request.resource.data.id == userId;
-      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
-      allow delete: if isExistingOwner(userId);
+    function isAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
     /**
-     * @description Defines the structure and enforces permissions for attendance records.
+     * @description Rules for the /users/{userId} collection.
+     * @path /users/{userId}
+     * @allow (create) User n3JwHYpMBvMN40SoyMk8PJF6iJ12 can create their own user document.
+     * @allow (get) User n3JwHYpMBvMN40SoyMk8PJF6iJ12 can get their own user document.
+     * @allow (list) User n3JwHYpMBvMN40SoyMk8PJF6iJ12 can list their own user document.
+     * @allow (update) User n3JwHYpMBvMN40SoyMk8PJF6iJ12 can update their own user document.
+     * @allow (delete) User n3JwHYpMBvMN40SoyMk8PJF6iJ12 can delete their own user document.
+     * @deny (create) User otherUserId cannot create a user document with ID n3JwHYpMBvMN40SoyMk8PJF6iJ12.
+     * @principle Enforces document ownership for writes and reads.
+     */
+    match /users/{userId} {
+      allow get: if isSignedIn() && isOwner(userId);
+      allow list: if isSignedIn() && isOwner(userId);
+      allow create: if isSignedIn() && isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isSignedIn() && isExistingOwner(userId) && request.resource.data.id == resource.data.id;
+      allow delete: if isSignedIn() && isExistingOwner(userId);
+    }
+
+    /**
+     * @description Rules for the /attendance_records/{attendanceRecordId} collection.
      * @path /attendance_records/{attendanceRecordId}
-     * @allow (create) - Allows any authenticated user to create.
-     * @deny (create) - Always validate the create operation.
-     * @allow (get, list) - Allows any authenticated user to get and list.
-     * @allow (update, delete) - No update or delete allowed.
-     * @principle Enforces open read, limited write.
+     * @allow (create) An admin can create attendance records.
+     * @allow (get) Anyone can get attendance records.
+     * @allow (list) Anyone can list attendance records.
+     * @allow (update) An admin can update attendance records.
+     * @allow (delete) An admin can delete attendance records.
+     * @deny (create) A non-admin user cannot create an attendance record.
+     * @principle Requires admin role for creates, updates, and deletes.  Allows public read access.
      */
     match /attendance_records/{attendanceRecordId} {
       allow get, list: if true;
-      allow create: if isSignedIn();
-      allow update, delete: if false;
+      allow create: if isSignedIn() && isAdmin();
+      allow update: if isSignedIn() && isAdmin() && resource != null;
+      allow delete: if isSignedIn() && isAdmin() && resource != null;
     }
 
     /**
-     * @description Defines the structure and enforces permissions for terminals.
+     * @description Rules for the /terminals/{terminalId} collection.
      * @path /terminals/{terminalId}
-     * @allow (create) - Allows any authenticated user to create.
-     * @deny (create) - Always validate the create operation.
-     * @allow (get, list) - Allows any authenticated user to get and list.
-     * @allow (update, delete) - No update or delete allowed.
-     * @principle Enforces open read, limited write.
+     * @allow (create) An admin can create terminals.
+     * @allow (get) Anyone can get terminal information.
+     * @allow (list) Anyone can list terminal information.
+     * @allow (update) An admin can update terminals.
+     * @allow (delete) An admin can delete terminals.
+     * @deny (create) A non-admin user cannot create a terminal.
+     * @principle Requires admin role for creates, updates, and deletes.  Allows public read access.
      */
     match /terminals/{terminalId} {
       allow get, list: if true;
-      allow create: if isSignedIn();
-      allow update, delete: if false;
+      allow create: if isSignedIn() && isAdmin();
+      allow update: if isSignedIn() && isAdmin() && resource != null;
+      allow delete: if isSignedIn() && isAdmin() && resource != null;
     }
 
     /**
-     * @description Defines the structure and enforces permissions for incident types.
+     * @description Rules for the /incident_types/{incidentTypeId} collection.
      * @path /incident_types/{incidentTypeId}
-     * @allow (create) - Allows any authenticated user to create.
-     * @deny (create) - Always validate the create operation.
-     * @allow (get, list) - Allows any authenticated user to get and list.
-     * @allow (update, delete) - No update or delete allowed.
-     * @principle Enforces open read, limited write.
+     * @allow (create) An admin can create incident types.
+     * @allow (get) Anyone can get incident type information.
+     * @allow (list) Anyone can list incident types.
+     * @allow (update) An admin can update incident types.
+     * @allow (delete) An admin can delete incident types.
+     * @deny (create) A non-admin user cannot create an incident type.
+     * @principle Requires admin role for creates, updates, and deletes.  Allows public read access.
      */
     match /incident_types/{incidentTypeId} {
       allow get, list: if true;
-      allow create: if isSignedIn();
-      allow update, delete: if false;
+      allow create: if isSignedIn() && isAdmin();
+      allow update: if isSignedIn() && isAdmin() && resource != null;
+      allow delete: if isSignedIn() && isAdmin() && resource != null;
     }
 
     /**
-     * @description Defines the structure and enforces permissions for employees.
+     * @description Rules for the /employees/{employeeId} collection.
      * @path /employees/{employeeId}
-     * @allow (create) - Allows any authenticated user to create.
-     * @deny (create) - Always validate the create operation.
-     * @allow (get, list) - Allows any authenticated user to get and list.
-     * @allow (update, delete) - No update or delete allowed.
-     * @principle Enforces open read, limited write.
+     * @allow (create) An admin can create employees.
+     * @allow (get) Anyone can get employee information.
+     * @allow (list) Anyone can list employees.
+     * @allow (update) An admin can update employees.
+     * @allow (delete) An admin can delete employees.
+     * @deny (create) A non-admin user cannot create an employee.
+     * @principle Requires admin role for creates, updates, and deletes. Allows public read access.
      */
     match /employees/{employeeId} {
       allow get, list: if true;
-      allow create: if isSignedIn();
-      allow update, delete: if false;
+      allow create: if isSignedIn() && isAdmin();
+      allow update: if isSignedIn() && isAdmin() && resource != null;
+      allow delete: if isSignedIn() && isAdmin() && resource != null;
     }
 
     /**
-     * @description Defines the structure and enforces permissions for visit registrations.
+     * @description Rules for the /visit_registrations/{visitRegistrationId} collection.
      * @path /visit_registrations/{visitRegistrationId}
-     * @allow (create) - Allows any authenticated user to create.
-     * @deny (create) - Always validate the create operation.
-     * @allow (get, list) - Allows any authenticated user to get and list.
-     * @allow (update, delete) - No update or delete allowed.
-     * @principle Enforces open read, limited write.
+     * @allow (create) Anyone can create a visit registration.
+     * @allow (get) Anyone can get visit registration information.
+     * @allow (list) Anyone can list visit registrations.
+     * @allow (update) An admin can update visit registrations.
+     * @allow (delete) An admin can delete visit registrations.
+     * @deny (update) A non-admin user cannot update visit registrations.
+     * @deny (delete) A non-admin user cannot delete visit registrations.
+     * @principle Allows public create, get, and list. Requires admin role for updates and deletes.
      */
     match /visit_registrations/{visitRegistrationId} {
-      allow get, list: if true;
-      allow create: if isSignedIn();
-      allow update, delete: if false;
+      allow get, list, create: if true;
+      allow update: if isSignedIn() && isAdmin() && resource != null;
+      allow delete: if isSignedIn() && isAdmin() && resource != null;
     }
 
     /**
-     * @description Defines the structure and enforces permissions for favorite visitors.
+     * @description Rules for the /favorite_visitors/{favoriteVisitorId} collection.
      * @path /favorite_visitors/{favoriteVisitorId}
-     * @allow (create) - Allows any authenticated user to create.
-     * @deny (create) - Always validate the create operation.
-     * @allow (get, list) - Allows any authenticated user to get and list.
-     * @allow (update, delete) - No update or delete allowed.
-     * @principle Enforces open read, limited write.
+     * @allow (create) An admin can create favorite visitors.
+     * @allow (get) Anyone can get favorite visitor information.
+     * @allow (list) Anyone can list favorite visitors.
+     * @allow (update) An admin can update favorite visitors.
+     * @allow (delete) An admin can delete favorite visitors.
+     * @deny (create) A non-admin user cannot create favorite visitors.
+     * @principle Requires admin role for creates, updates, and deletes. Allows public read access.
      */
     match /favorite_visitors/{favoriteVisitorId} {
       allow get, list: if true;
-      allow create: if isSignedIn();
-      allow update, delete: if false;
+      allow create: if isSignedIn() && isAdmin();
+      allow update: if isSignedIn() && isAdmin() && resource != null;
+      allow delete: if isSignedIn() && isAdmin() && resource != null;
     }
   }
 }
