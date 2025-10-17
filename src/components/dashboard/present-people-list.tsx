@@ -22,7 +22,7 @@ import {
   deleteDocumentNonBlocking,
 } from '@/firebase';
 import type { VisitRegistration, UsuariDins } from '@/lib/types';
-import { collection, query, where } from 'firebase/firestore';
+import { collection, query, where, doc } from 'firebase/firestore';
 import { Contact, Users, User, Loader2, LogOut } from 'lucide-react';
 import {
   Accordion,
@@ -74,11 +74,19 @@ export default function PresentPeopleList() {
   }, [visitors]);
 
   const handleVisitorCheckout = (visitorId: string) => {
-    if (firestore) {
+    if (firestore && visitorId) {
       const visitorDocRef = doc(firestore, 'visit_registrations', visitorId);
       deleteDocumentNonBlocking(visitorDocRef);
     }
   };
+  
+  const handleEmployeeCheckout = (employeeId: string) => {
+    if (firestore && employeeId) {
+        const employeeDocRef = doc(firestore, 'usuaris_dins', employeeId);
+        deleteDocumentNonBlocking(employeeDocRef);
+    }
+  };
+
 
   const isLoading = staffLoading || visitorsLoading;
   const totalPresent = (presentStaff?.length || 0) + presentVisitors.length;
@@ -191,6 +199,7 @@ export default function PresentPeopleList() {
                           <TableHead className="hidden sm:table-cell">
                             Hora Darrera Entrada
                           </TableHead>
+                          <TableHead className="text-right">Accions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -202,6 +211,24 @@ export default function PresentPeopleList() {
                             <TableCell>{employee.nom}</TableCell>
                             <TableCell className="hidden sm:table-cell">
                               {getFormattedTime(employee.horaDarreraEntrada)}
+                            </TableCell>
+                             <TableCell className="text-right">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() =>
+                                      handleEmployeeCheckout(employee.id)
+                                    }
+                                  >
+                                    <LogOut className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Marcar Sortida</p>
+                                </TooltipContent>
+                              </Tooltip>
                             </TableCell>
                           </TableRow>
                         ))}
