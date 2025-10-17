@@ -84,7 +84,7 @@ export default function PunchClock() {
                                 <div className='grid gap-2'>
                                     <Label>&nbsp;</Label>
                                     <Button onClick={handleManualPunch} className='w-full'>
-                                        Registrar Fichaje
+                                        Registrar Entrada
                                     </Button>
                                 </div>
                             </div>
