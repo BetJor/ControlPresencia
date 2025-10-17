@@ -2,11 +2,7 @@
 import { Button } from '@/components/ui/button';
 import {
   Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
   CardHeader,
-  CardTitle,
 } from '@/components/ui/card';
 import {
     Accordion,
@@ -14,13 +10,6 @@ import {
     AccordionItem,
     AccordionTrigger,
   } from "@/components/ui/accordion"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { mockEmployees } from '@/lib/mock-data';
 import { Contact, Edit, Fingerprint, UserPlus } from 'lucide-react';
@@ -67,19 +56,8 @@ export default function PunchClock() {
                             <h3 className="mb-2 font-medium flex items-center gap-2"><Fingerprint className='h-5 w-5' /> Fichaje Manual Empleado</h3>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="grid gap-2">
-                                    <Label htmlFor="employee-select">Empleado</Label>
-                                    <Select>
-                                    <SelectTrigger id='employee-select'>
-                                        <SelectValue placeholder="Seleccionar Empleado" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {mockEmployees.map((employee) => (
-                                        <SelectItem key={employee.id} value={employee.id}>
-                                            {employee.name} {employee.cognoms}
-                                        </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                    </Select>
+                                    <Label htmlFor="employee-search">Empleado</Label>
+                                    <Input id="employee-search" placeholder="Buscar empleado..." />
                                 </div>
                                 <div className='grid gap-2'>
                                     <Label>&nbsp;</Label>
