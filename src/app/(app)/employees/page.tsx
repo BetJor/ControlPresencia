@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
 import { collection } from "firebase/firestore";
-import { Loader2, BookUser, Mail, Phone, Search, ChevronsUpDown, Check } from "lucide-react";
+import { Loader2, BookUser, Mail, Phone, Search, ChevronsUpDown, Check, XIcon } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Input } from '@/components/ui/input';
@@ -40,7 +40,7 @@ export default function DirectoryPage() {
         return employees.filter(employee => {
             const fullName = `${employee.nom} ${employee.cognom}`.toLowerCase();
             const nameMatch = nameFilter ? fullName.includes(nameFilter.toLowerCase()) : true;
-            const departmentMatch = departmentFilter ? employee.departament.toLowerCase().includes(departmentFilter.toLowerCase()) : true;
+            const departmentMatch = departmentFilter ? employee.departament.toLowerCase() === departmentFilter.toLowerCase() : true;
             return nameMatch && departmentMatch;
         });
     }, [employees, nameFilter, departmentFilter]);
@@ -67,7 +67,7 @@ export default function DirectoryPage() {
                             className="pl-10"
                         />
                     </div>
-                     <div className="w-full md:w-1/2">
+                     <div className="w-full md:w-1/2 flex items-center gap-2">
                         <Popover open={departmentOpen} onOpenChange={setDepartmentOpen}>
                             <PopoverTrigger asChild>
                                 <Button
@@ -86,8 +86,6 @@ export default function DirectoryPage() {
                                 <Command>
                                     <CommandInput 
                                       placeholder="Buscar departamento..." 
-                                      value={departmentFilter} 
-                                      onValueChange={setDepartmentFilter}
                                     />
                                     <CommandList>
                                         <CommandEmpty>No se encontró el departamento.</CommandEmpty>
@@ -108,7 +106,7 @@ export default function DirectoryPage() {
                                                     key={dep}
                                                     value={dep}
                                                     onSelect={(currentValue) => {
-                                                        setDepartmentFilter(currentValue.toLowerCase() === departmentFilter ? "" : currentValue);
+                                                        setDepartmentFilter(currentValue === departmentFilter ? "" : currentValue);
                                                         setDepartmentOpen(false);
                                                     }}
                                                 >
@@ -121,6 +119,11 @@ export default function DirectoryPage() {
                                 </Command>
                             </PopoverContent>
                         </Popover>
+                        {departmentFilter && (
+                            <Button variant="ghost" size="icon" onClick={() => setDepartmentFilter('')}>
+                                <XIcon className="h-4 w-4" />
+                            </Button>
+                        )}
                     </div>
                 </div>
 
