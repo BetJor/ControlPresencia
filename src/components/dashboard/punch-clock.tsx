@@ -50,6 +50,16 @@ export default function PunchClock() {
 
   const { data: favoriteVisitors, isLoading: favoritesLoading } = useCollection<FavoriteVisitor>(favoriteVisitorsCollection);
 
+  React.useEffect(() => {
+    if (favoriteVisitors) {
+      const isAlreadyFavorite = favoriteVisitors.some(
+        (fav) => fav.name.toLowerCase() === visitorName.toLowerCase() && fav.company.toLowerCase() === visitorCompany.toLowerCase()
+      );
+      setIsFavorite(isAlreadyFavorite);
+    }
+  }, [visitorName, visitorCompany, favoriteVisitors]);
+
+
   const handleManualPunch = () => {
     toast({
       title: 'Fichaje Manual Registrado',
