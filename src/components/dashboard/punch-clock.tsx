@@ -118,24 +118,26 @@ export default function PunchClock() {
 
                             {/* Visitor Entry */}
                             <div>
-                            <h3 className="mb-2 font-medium flex items-center gap-2"><Contact className='h-5 w-5' /> Entrada de Visita</h3>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="grid gap-2">
-                                    <Label htmlFor='visitor-name'>Nombre Visita</Label>
-                                    <Input id='visitor-name' placeholder="Nombre completo" />
+                                <h3 className="mb-2 font-medium flex items-center gap-2"><Contact className='h-5 w-5' /> Entrada de Visita</h3>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid gap-2">
+                                        <Label htmlFor='visitor-name'>Nombre Visita</Label>
+                                        <Input id='visitor-name' placeholder="Nombre completo" />
+                                    </div>
+                                    <div className="grid gap-2">
+                                        <Label htmlFor='visitor-company'>Empresa</Label>
+                                        <div className="flex items-center gap-2">
+                                            <Input id='visitor-company' placeholder="Nombre de la empresa" className="w-full" />
+                                            <Button variant="outline" size="icon">
+                                                <Star className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="grid gap-2">
-                                    <Label htmlFor='visitor-company'>Empresa</Label>
-                                    <Input id='visitor-company' placeholder="Nombre de la empresa" />
-                                </div>
-                            </div>
                                 <div className="flex items-center gap-4 mt-4">
                                     <Button onClick={handleVisitorEntry} className='w-full'>
                                         <UserPlus className='mr-2'/>
                                         Registrar Visita
-                                    </Button>
-                                    <Button variant="outline" size="icon">
-                                        <Star className="h-4 w-4" />
                                     </Button>
                                 </div>
                             </div>
