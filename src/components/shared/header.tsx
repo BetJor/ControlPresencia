@@ -53,10 +53,6 @@ export default function Header() {
               <Contact className="h-5 w-5" />
               Visitas
             </Link>
-            <Link href="/directori" className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground">
-              <BookUser className="h-5 w-5" />
-              Directori
-            </Link>
             <Link href="#" className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground">
               <Settings className="h-5 w-5" />
               Ajustes
