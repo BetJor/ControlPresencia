@@ -2,21 +2,11 @@ import Link from 'next/link';
 import {
   Home,
   Users,
-  Computer,
-  AlertTriangle,
   Settings,
   Clock,
   PanelLeft,
   Contact,
 } from 'lucide-react';
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -43,12 +33,12 @@ export default function Header() {
         </SheetTrigger>
         <SheetContent side="left" className="sm:max-w-xs">
           <nav className="grid gap-6 text-lg font-medium">
-            <Link
+             <Link
               href="/dashboard"
-              className="group flex h-10 w-10 shrink-0 items-center justify-center gap-2 rounded-full bg-primary text-lg font-semibold text-primary-foreground md:text-base"
+              className="flex items-center gap-2 text-lg font-semibold"
             >
-              <Clock className="h-5 w-5 transition-all group-hover:scale-110" />
-              <span className="sr-only">Clockwork</span>
+              <Clock className="h-6 w-6 text-primary" />
+              <span className="font-headline text-xl">Clockwork</span>
             </Link>
             <Link href="/dashboard" className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground">
               <Home className="h-5 w-5" />
@@ -69,20 +59,14 @@ export default function Header() {
           </nav>
         </SheetContent>
       </Sheet>
-      <Breadcrumb className="hidden md:flex">
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild>
-              <Link href="#">Panel</Link>
-            </BreadcrumbLink>
-          </BreadcrumbItem>
-          {/* Example breadcrumb extension */}
-          {/* <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbPage>Recent Punches</BreadcrumbPage>
-          </BreadcrumbItem> */}
-        </BreadcrumbList>
-      </Breadcrumb>
+      
+      <div className="flex items-center gap-2">
+          <Link href="/dashboard" className="hidden items-center gap-2 text-lg font-semibold md:flex">
+             <Clock className="h-6 w-6 text-primary" />
+             <span className="font-headline text-xl">Clockwork</span>
+          </Link>
+      </div>
+
       <div className="relative ml-auto flex-1 md:grow-0">
         {/* Search could go here if needed */}
       </div>
