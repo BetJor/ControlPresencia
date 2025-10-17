@@ -1,3 +1,40 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "user1",
+      "description": "Avatar for Sarah Johnson",
+      "imageUrl": "https://picsum.photos/seed/user1/100/100",
+      "imageHint": "woman portrait"
+    },
+    {
+      "id": "user2",
+      "description": "Avatar for Michael Smith",
+      "imageUrl": "https://picsum.photos/seed/user2/100/100",
+      "imageHint": "man portrait"
+    },
+    {
+      "id": "user3",
+      "description": "Avatar for Emily Davis",
+      "imageUrl": "https://picsum.photos/seed/user3/100/100",
+      "imageHint": "woman smiling"
+    },
+    {
+      "id": "user4",
+      "description": "Avatar for David Chen",
+      "imageUrl": "https://picsum.photos/seed/user4/100/100",
+      "imageHint": "man glasses"
+    },
+    {
+      "id": "user5",
+      "description": "Avatar for a generic user",
+      "imageUrl": "https://picsum.photos/seed/user5/100/100",
+      "imageHint": "person silhouette"
+    },
+    {
+      "id": "login-background",
+      "description": "Abstract background for login page",
+      "imageUrl": "https://picsum.photos/seed/loginbg/1920/1080",
+      "imageHint": "abstract geometric"
+    }
+  ]
 }
