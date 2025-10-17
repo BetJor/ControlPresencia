@@ -21,6 +21,7 @@ import {
   useFirestore,
   useMemoFirebase,
   addDocumentNonBlocking,
+  deleteDocumentNonBlocking
 } from '@/firebase';
 import type { Employee, Punch, VisitRegistration } from '@/lib/types';
 import {
@@ -46,6 +47,7 @@ import {
 } from '@/components/ui/accordion';
 import { Button } from '../ui/button';
 import { useEffect, useState } from 'react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 
 export default function PresentPeopleList() {
   const firestore = useFirestore();
@@ -133,7 +135,7 @@ export default function PresentPeopleList() {
   const handleVisitorCheckout = (visitorId: string) => {
     if (firestore) {
       const visitorDocRef = doc(firestore, 'visit_registrations', visitorId);
-      deleteDoc(visitorDocRef);
+      deleteDocumentNonBlocking(visitorDocRef);
     }
   };
   
@@ -171,6 +173,7 @@ export default function PresentPeopleList() {
                 <p className="ml-2">Actualizando lista de presencia...</p>
             </div>
         ) : (
+        <TooltipProvider>
         <Accordion type="multiple" defaultValue={['visitors', 'employees']}>
           <AccordionItem value="visitors">
             <AccordionTrigger className="text-base font-medium">
@@ -207,14 +210,20 @@ export default function PresentPeopleList() {
                           {visitor.timestamp.toDate().toLocaleTimeString()}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleVisitorCheckout(visitor.id)}
-                          >
-                            <LogOut className="mr-2 h-4 w-4" />
-                            Marcar Salida
-                          </Button>
+                          <Tooltip>
+                              <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleVisitorCheckout(visitor.id)}
+                                  >
+                                    <LogOut className="h-4 w-4" />
+                                  </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Marcar Salida</p>
+                              </TooltipContent>
+                          </Tooltip>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -264,14 +273,20 @@ export default function PresentPeopleList() {
                           {getEmployeeLastPunchTime(employee.id)}
                         </TableCell>
                         <TableCell className="text-right">
-                           <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEmployeeCheckout(employee.id)}
-                          >
-                            <LogOut className="mr-2 h-4 w-4" />
-                            Marcar Salida
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                               <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleEmployeeCheckout(employee.id)}
+                              >
+                                <LogOut className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Marcar Salida</p>
+                            </TooltipContent>
+                          </Tooltip>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -285,6 +300,7 @@ export default function PresentPeopleList() {
             </AccordionContent>
           </AccordionItem>
         </Accordion>
+        </TooltipProvider>
         )}
          {totalPresent === 0 && !isLoading && (
             <div className="pt-4 text-center text-muted-foreground">
