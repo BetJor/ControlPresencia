@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import {
   CardDescription,
   CardHeader,
-  CardTitle
 } from '@/components/ui/card';
 import {
     Accordion,
@@ -20,7 +19,7 @@ import { Label } from '../ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
-import { Card } from "@/components/ui/card";
+import { Card, CardTitle } from "@/components/ui/card";
 import { useFirestore, useUser, addDocumentNonBlocking, useCollection, useMemoFirebase } from "@/firebase";
 import { collection, serverTimestamp } from "firebase/firestore";
 import { Loader2 } from "lucide-react";
@@ -35,8 +34,8 @@ export default function PunchClock() {
   const { toast } = useToast();
   const [employeeOpen, setEmployeeOpen] = React.useState(false);
   const [employeeValue, setEmployeeValue] = React.useState("");
-
-  const [visitorOpen, setVisitorOpen] = React.useState(false);
+  
+  const [favoritesOpen, setFavoritesOpen] = React.useState(false);
   const [visitorName, setVisitorName] = React.useState("");
   const [visitorCompany, setVisitorCompany] = React.useState("");
   const [isFavorite, setIsFavorite] = React.useState(false);
@@ -75,7 +74,8 @@ export default function PunchClock() {
     };
 
     if (firestore) {
-        addDocumentNonBlocking(collection(firestore, 'visit_registrations'), visitData);
+        const visitsCollection = collection(firestore, 'visit_registrations');
+        addDocumentNonBlocking(visitsCollection, visitData);
 
         if (isFavorite) {
           // Check if the visitor is already a favorite to avoid duplicates
@@ -88,7 +88,8 @@ export default function PunchClock() {
                 name: visitorName,
                 company: visitorCompany,
               };
-              addDocumentNonBlocking(collection(firestore, 'favorite_visitors'), favoriteVisitorData);
+              const favsCollection = collection(firestore, 'favorite_visitors');
+              addDocumentNonBlocking(favsCollection, favoriteVisitorData);
           }
         }
 
@@ -197,84 +198,82 @@ export default function PunchClock() {
                                         <p className="ml-2">Cargando favoritos...</p>
                                      </div>
                                 ) : (
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="grid gap-2 col-span-2">
-                                        <Label htmlFor='visitor-name'>Visitante</Label>
-                                        <Popover open={visitorOpen} onOpenChange={setVisitorOpen}>
+                                <>
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="favorite-visitor-search">Buscar Favorito (Opcional)</Label>
+                                        <Popover open={favoritesOpen} onOpenChange={setFavoritesOpen}>
                                             <PopoverTrigger asChild>
                                                 <Button
                                                     variant="outline"
                                                     role="combobox"
-                                                    aria-expanded={visitorOpen}
+                                                    aria-expanded={favoritesOpen}
                                                     className="w-full justify-between"
-                                                    disabled={isLoading}
                                                 >
-                                                    {visitorName ? `${visitorName} (${visitorCompany})` : "Seleccionar o añadir visitante..."}
+                                                    Seleccionar visitante favorito...
                                                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                                 </Button>
                                             </PopoverTrigger>
-                                            <PopoverContent className="w-full p-0">
-                                                <Command filter={(value, search) => {
-                                                    const favorite = favoriteVisitors?.find(fav => fav.id === value);
-                                                    if (favorite) {
-                                                        const combinedText = `${favorite.name} ${favorite.company}`.toLowerCase();
-                                                        return combinedText.includes(search.toLowerCase()) ? 1 : 0;
-                                                    }
-                                                    return 0;
-                                                }}>
-                                                    <CommandInput 
-                                                        placeholder="Buscar visitante o añadir nuevo..." 
-                                                        value={visitorName}
-                                                        onValueChange={setVisitorName}
-                                                    />
+                                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                                                <Command>
+                                                    <CommandInput placeholder="Buscar visitante..." />
                                                     <CommandList>
-                                                        <CommandEmpty>
-                                                          <div className="p-4">
-                                                            <p className="text-sm text-center mb-2">No se encontró el visitante.</p>
-                                                            <Input 
-                                                                placeholder="Empresa"
-                                                                value={visitorCompany}
-                                                                onChange={(e) => setVisitorCompany(e.target.value)}
-                                                                className="w-full"
-                                                            />
-                                                          </div>
-                                                        </CommandEmpty>
+                                                        <CommandEmpty>No se encontró ningún visitante favorito.</CommandEmpty>
                                                         <CommandGroup>
-                                                        {favoriteVisitors?.map((visitor) => (
-                                                            <CommandItem
-                                                                key={visitor.id}
-                                                                value={visitor.id}
-                                                                onSelect={() => {
-                                                                    setVisitorName(visitor.name);
-                                                                    setVisitorCompany(visitor.company);
-                                                                    setVisitorOpen(false);
-                                                                }}
-                                                            >
-                                                                <Check className={cn("mr-2 h-4 w-4", visitorName === visitor.name ? "opacity-100" : "opacity-0")} />
-                                                                {visitor.name} ({visitor.company})
-                                                            </CommandItem>
-                                                        ))}
+                                                            {favoriteVisitors?.map((visitor) => (
+                                                                <CommandItem
+                                                                    key={visitor.id}
+                                                                    value={`${visitor.name} ${visitor.company}`}
+                                                                    onSelect={() => {
+                                                                        setVisitorName(visitor.name);
+                                                                        setVisitorCompany(visitor.company);
+                                                                        setFavoritesOpen(false);
+                                                                    }}
+                                                                >
+                                                                    <Check className={cn("mr-2 h-4 w-4", visitorName === visitor.name ? "opacity-100" : "opacity-0")} />
+                                                                    {visitor.name} ({visitor.company})
+                                                                </CommandItem>
+                                                            ))}
                                                         </CommandGroup>
                                                     </CommandList>
                                                 </Command>
                                             </PopoverContent>
                                         </Popover>
                                     </div>
-                                </div>
-                                )}
+                                    <div className="grid grid-cols-2 gap-4 mt-4">
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="visitor-name">Nombre</Label>
+                                            <Input 
+                                                id="visitor-name"
+                                                placeholder="Nombre del visitante"
+                                                value={visitorName}
+                                                onChange={(e) => setVisitorName(e.target.value)}
+                                            />
+                                        </div>
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="visitor-company">Empresa</Label>
+                                            <Input 
+                                                id="visitor-company"
+                                                placeholder="Nombre de la empresa"
+                                                value={visitorCompany}
+                                                onChange={(e) => setVisitorCompany(e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
 
-                                <div className="flex items-center gap-4 mt-4">
-                                     <div className="flex items-center space-x-2">
-                                        <Button variant="ghost" size="sm" onClick={() => setIsFavorite(!isFavorite)} disabled={isLoading || !visitorName}>
-                                            <Star className={cn("h-4 w-4", isFavorite ? "fill-primary text-primary" : "text-muted-foreground")} />
-                                            <span className="ml-2">Guardar como favorito</span>
+                                    <div className="flex items-center gap-4 mt-4">
+                                        <div className="flex items-center space-x-2">
+                                            <Button variant="ghost" size="sm" onClick={() => setIsFavorite(!isFavorite)} disabled={isLoading || !visitorName || !visitorCompany}>
+                                                <Star className={cn("h-4 w-4", isFavorite ? "fill-primary text-primary" : "text-muted-foreground")} />
+                                                <span className="ml-2 text-sm text-muted-foreground">Guardar como favorito</span>
+                                            </Button>
+                                        </div>
+                                        <Button onClick={handleVisitorEntry} className='w-full' disabled={isLoading || !visitorName || !visitorCompany}>
+                                            <UserPlus className='mr-2'/>
+                                            Registrar Visita
                                         </Button>
                                     </div>
-                                    <Button onClick={handleVisitorEntry} className='w-full' disabled={isLoading || !visitorName || !visitorCompany}>
-                                        <UserPlus className='mr-2'/>
-                                        Registrar Visita
-                                    </Button>
-                                </div>
+                                </>
+                                )}
                             </div>
                         </div>
                     </AccordionContent>
