@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
-import { collection } from "firebase/firestore";
+import { collection, query, where, and, or, orderBy } from "firebase/firestore";
 import { Loader2, BookUser, Mail, Phone, Search, ChevronsUpDown, Check, XIcon } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -22,30 +22,63 @@ export default function DirectoryPage() {
     const [departmentFilter, setDepartmentFilter] = useState('');
     const [departmentOpen, setDepartmentOpen] = useState(false);
 
-    const directoriCollection = useMemoFirebase(() => {
+    // This query is now for getting all unique departments for the dropdown
+    const allDepartmentsCollection = useMemoFirebase(() => {
         if (!firestore) return null;
         return collection(firestore, 'directori');
     }, [firestore]);
-
-    const { data: employees, isLoading } = useCollection<Directori>(directoriCollection);
+    const { data: allEmployeesForDepts, isLoading: isLoadingDepts } = useCollection<Directori>(allDepartmentsCollection);
 
     const departments = useMemo(() => {
-        if (!employees) return [];
-        const allDepartments = employees.map(employee => employee.departament).filter(Boolean);
+        if (!allEmployeesForDepts) return [];
+        const allDepartments = allEmployeesForDepts.map(employee => employee.departament).filter(Boolean);
         return [...new Set(allDepartments)].sort();
-    }, [employees]);
+    }, [allEmployeesForDepts]);
 
+    const directoriQuery = useMemoFirebase(() => {
+        if (!firestore) return null;
+
+        const baseCollection = collection(firestore, 'directori');
+        
+        const nameFilterLower = nameFilter.toLowerCase();
+
+        // Firestore doesn't support case-insensitive queries directly or 'contains' operations efficiently.
+        // The common practice is to store a lowercase version of the field to search on.
+        // Since we don't have that, we are limited to '>=', '<=', and 'array-contains'.
+        // For a 'startsWith' effect, we can use a range query.
+        const nameEnd = nameFilterLower + '\uf8ff';
+
+        let conditions = [];
+        if (departmentFilter) {
+            conditions.push(where('departament', '==', departmentFilter));
+        }
+        if (nameFilter) {
+            // This is a workaround for case-insensitive startsWith. It's not perfect.
+            // For a real app, you'd store lowercase fields. We will filter client side for now for a better experience.
+        }
+
+        if (conditions.length > 0) {
+            return query(baseCollection, ...conditions, orderBy('departament'), orderBy('nom'));
+        }
+        
+        return query(baseCollection, orderBy('nom'));
+
+    }, [firestore, departmentFilter, nameFilter]);
+
+    const { data: employees, isLoading } = useCollection<Directori>(directoriQuery);
+    
     const filteredEmployees = useMemo(() => {
         if (!employees) return [];
         return employees.filter(employee => {
             const fullName = `${employee.nom} ${employee.cognom}`.toLowerCase();
-            const nameMatch = nameFilter ? fullName.includes(nameFilter.toLowerCase()) : true;
-            const departmentMatch = departmentFilter ? employee.departament.toLowerCase() === departmentFilter.toLowerCase() : true;
-            return nameMatch && departmentMatch;
+            return nameFilter ? fullName.includes(nameFilter.toLowerCase()) : true;
         });
-    }, [employees, nameFilter, departmentFilter]);
-    
-    const currentDepartment = departments.find(dep => dep.toLowerCase() === departmentFilter.toLowerCase())
+    }, [employees, nameFilter]);
+
+
+    const currentDepartment = departments.find(dep => dep === departmentFilter)
+
+    const effectiveIsLoading = isLoading || isLoadingDepts;
 
     return (
         <Card>
@@ -118,11 +151,11 @@ export default function DirectoryPage() {
                                                     key={dep}
                                                     value={dep}
                                                     onSelect={(currentValue) => {
-                                                        setDepartmentFilter(currentValue === departmentFilter ? "" : currentValue);
+                                                        setDepartmentFilter(currentValue === departmentFilter.toLowerCase() ? "" : dep);
                                                         setDepartmentOpen(false);
                                                     }}
                                                 >
-                                                    <Check className={cn("mr-2 h-4 w-4", departmentFilter === dep.toLowerCase() ? "opacity-100" : "opacity-0")} />
+                                                    <Check className={cn("mr-2 h-4 w-4", departmentFilter === dep ? "opacity-100" : "opacity-0")} />
                                                     {dep}
                                                 </CommandItem>
                                             ))}
@@ -139,7 +172,7 @@ export default function DirectoryPage() {
                     </div>
                 </div>
 
-                {isLoading ? (
+                {effectiveIsLoading ? (
                     <div className="flex items-center justify-center py-8">
                         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                         <p className="ml-2">Cargando directorio...</p>
