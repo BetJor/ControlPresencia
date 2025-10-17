@@ -25,14 +25,14 @@ export default function DirectoryPage() {
     // This query is now for getting all unique departments for the dropdown
     const allDepartmentsCollection = useMemoFirebase(() => {
         if (!firestore) return null;
-        return collection(firestore, 'directori');
+        return query(collection(firestore, 'directori'), orderBy('departament'));
     }, [firestore]);
     const { data: allEmployeesForDepts, isLoading: isLoadingDepts } = useCollection<Directori>(allDepartmentsCollection);
 
     const departments = useMemo(() => {
         if (!allEmployeesForDepts) return [];
         const allDepartments = allEmployeesForDepts.map(employee => employee.departament).filter(Boolean);
-        return [...new Set(allDepartments)].sort();
+        return [...new Set(allDepartments)];
     }, [allEmployeesForDepts]);
 
     const directoriQuery = useMemoFirebase(() => {
@@ -40,25 +40,35 @@ export default function DirectoryPage() {
 
         const baseCollection = collection(firestore, 'directori');
         
-        const nameFilterLower = nameFilter.toLowerCase();
-
-        // Firestore doesn't support case-insensitive queries directly or 'contains' operations efficiently.
-        // The common practice is to store a lowercase version of the field to search on.
-        // Since we don't have that, we are limited to '>=', '<=', and 'array-contains'.
-        // For a 'startsWith' effect, we can use a range query.
-        const nameEnd = nameFilterLower + '\uf8ff';
-
         let conditions = [];
+        
         if (departmentFilter) {
             conditions.push(where('departament', '==', departmentFilter));
         }
+
         if (nameFilter) {
-            // This is a workaround for case-insensitive startsWith. It's not perfect.
-            // For a real app, you'd store lowercase fields. We will filter client side for now for a better experience.
+            const nameFilterLower = nameFilter.toLowerCase();
+            const nameEnd = nameFilterLower + '\uf8ff';
+            conditions.push(
+                or(
+                    and(where('nom', '>=', nameFilter), where('nom', '<', nameFilter + '\uf8ff')),
+                    and(where('cognom', '>=', nameFilter), where('cognom', '<', nameFilter + '\uf8ff')),
+                     // Basic attempt for full name search, requires lowercase fields for better results
+                    and(where('nom', '>=', nameFilter.split(' ')[0] || ''), where('nom', '<', (nameFilter.split(' ')[0] || '') + '\uf8ff'))
+                )
+            );
         }
 
+        // Add orderBy clauses. If nameFilter is active, order by 'nom'
+        const orderByClauses = [];
+        if (nameFilter) {
+            orderByClauses.push(orderBy('nom'));
+        }
+        orderByClauses.push(orderBy('departament'));
+
+
         if (conditions.length > 0) {
-            return query(baseCollection, ...conditions, orderBy('departament'), orderBy('nom'));
+            return query(baseCollection, ...conditions, ...orderByClauses);
         }
         
         return query(baseCollection, orderBy('nom'));
@@ -67,15 +77,6 @@ export default function DirectoryPage() {
 
     const { data: employees, isLoading } = useCollection<Directori>(directoriQuery);
     
-    const filteredEmployees = useMemo(() => {
-        if (!employees) return [];
-        return employees.filter(employee => {
-            const fullName = `${employee.nom} ${employee.cognom}`.toLowerCase();
-            return nameFilter ? fullName.includes(nameFilter.toLowerCase()) : true;
-        });
-    }, [employees, nameFilter]);
-
-
     const currentDepartment = departments.find(dep => dep === departmentFilter)
 
     const effectiveIsLoading = isLoading || isLoadingDepts;
@@ -177,7 +178,7 @@ export default function DirectoryPage() {
                         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                         <p className="ml-2">Cargando directorio...</p>
                     </div>
-                ) : filteredEmployees.length > 0 ? (
+                ) : employees && employees.length > 0 ? (
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -188,7 +189,7 @@ export default function DirectoryPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {filteredEmployees.map((employee) => (
+                            {employees.map((employee) => (
                                 <TableRow key={employee.id}>
                                     <TableCell>
                                         <div className="flex items-center gap-3">
@@ -233,14 +234,7 @@ export default function DirectoryPage() {
                     </Table>
                 ) : (
                     <div className="text-center text-muted-foreground py-8">
-                         {employees && employees.length > 0 ? (
-                            <p>No se han encontrado empleados que coincidan con la búsqueda.</p>
-                         ) : (
-                            <>
-                                <p>El directorio está vacío.</p>
-                                <p className="text-sm">Añade empleados a la colección 'directori' en Firestore para verlos aquí.</p>
-                            </>
-                         )}
+                         <p>No se han encontrado empleados que coincidan con la búsqueda.</p>
                     </div>
                 )}
             </CardContent>
