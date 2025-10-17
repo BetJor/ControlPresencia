@@ -39,7 +39,7 @@ export default function PunchClock() {
   }
 
   return (
-    <Card className="sm:col-span-2">
+    <Card>
       <CardHeader className="pb-3">
         <CardTitle className="font-headline flex items-center gap-2">
           <Edit className="h-6 w-6" />
