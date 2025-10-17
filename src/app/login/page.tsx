@@ -17,15 +17,17 @@ export default function LoginPage() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   useEffect(() => {
-    // If the user is logged in, redirect to the dashboard.
-    if (user) {
+    // If we are done loading and the user is logged in, redirect to the dashboard.
+    if (!isUserLoading && user) {
       router.push('/dashboard');
     }
-  }, [user, router]);
+  }, [user, isUserLoading, router]);
 
   const handleAnonymousLogin = () => {
     setIsLoggingIn(true);
-    initiateAnonymousSignIn(auth);
+    if(auth) {
+      initiateAnonymousSignIn(auth);
+    }
   };
   
   // Show a loading state while checking for user or during login process
@@ -34,7 +36,7 @@ export default function LoginPage() {
         <div className="flex items-center justify-center min-h-screen">
             <div className="flex flex-col items-center gap-4">
                 <Loader2 className="h-12 w-12 text-primary animate-spin" />
-                <p className="text-muted-foreground">Cargando...</p>
+                <p className="text-muted-foreground">{isLoggingIn ? 'Iniciando sesión...' : 'Cargando...'}</p>
             </div>
         </div>
     );
@@ -54,7 +56,7 @@ export default function LoginPage() {
             </p>
           </div>
           <div className="grid gap-4">
-            <Button onClick={handleAnonymousLogin} className="w-full">
+            <Button onClick={handleAnonymousLogin} className="w-full" disabled={isLoggingIn}>
               Acceder como invitado
             </Button>
           </div>

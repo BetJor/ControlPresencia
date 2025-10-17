@@ -21,7 +21,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
-import { useFirestore, addDocumentNonBlocking } from "@/firebase";
+import { useFirestore, addDocumentNonBlocking, useUser } from "@/firebase";
 import { collection, serverTimestamp } from "firebase/firestore";
 
 export default function PunchClock() {
@@ -32,6 +32,7 @@ export default function PunchClock() {
   const [visitorCompany, setVisitorCompany] = React.useState("");
   const [isFavorite, setIsFavorite] = React.useState(false);
   const firestore = useFirestore();
+  const { user, isUserLoading } = useUser();
 
   const handleManualPunch = () => {
     toast({
@@ -56,25 +57,33 @@ export default function PunchClock() {
       timestamp: serverTimestamp(),
     };
 
-    addDocumentNonBlocking(collection(firestore, 'visit_registrations'), visitData);
+    if (firestore) {
+        addDocumentNonBlocking(collection(firestore, 'visit_registrations'), visitData);
 
-    if (isFavorite) {
-      const favoriteVisitorData = {
-        name: visitorName,
-        company: visitorCompany,
-      };
-      addDocumentNonBlocking(collection(firestore, 'favorite_visitors'), favoriteVisitorData);
+        if (isFavorite) {
+          const favoriteVisitorData = {
+            name: visitorName,
+            company: visitorCompany,
+          };
+          addDocumentNonBlocking(collection(firestore, 'favorite_visitors'), favoriteVisitorData);
+        }
+
+        toast({
+          title: 'Visita Registrada',
+          description: 'La entrada de la visita ha sido registrada con éxito.',
+        });
+
+        // Reset fields
+        setVisitorName("");
+        setVisitorCompany("");
+        setIsFavorite(false);
+    } else {
+        toast({
+            variant: "destructive",
+            title: "Error",
+            description: "La base de datos no está disponible. Inténtalo de nuevo más tarde.",
+        });
     }
-
-     toast({
-      title: 'Visita Registrada',
-      description: 'La entrada de la visita ha sido registrada con éxito.',
-    });
-
-    // Reset fields
-    setVisitorName("");
-    setVisitorCompany("");
-    setIsFavorite(false);
   }
 
   return (
@@ -108,6 +117,7 @@ export default function PunchClock() {
                                             role="combobox"
                                             aria-expanded={open}
                                             className="w-full justify-between"
+                                            disabled={isUserLoading}
                                         >
                                             {value
                                             ? mockEmployees.find((employee) => `${employee.name.toLowerCase()} ${employee.cognoms.toLowerCase()}` === value)?.name + ' ' + mockEmployees.find((employee) => `${employee.name.toLowerCase()} ${employee.cognoms.toLowerCase()}` === value)?.cognoms
@@ -145,7 +155,7 @@ export default function PunchClock() {
                                 </div>
                                 <div className='grid gap-2'>
                                     <Label>&nbsp;</Label>
-                                    <Button onClick={handleManualPunch} className='w-full'>
+                                    <Button onClick={handleManualPunch} className='w-full' disabled={isUserLoading}>
                                         Registrar Entrada
                                     </Button>
                                 </div>
@@ -158,20 +168,20 @@ export default function PunchClock() {
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="grid gap-2">
                                         <Label htmlFor='visitor-name'>Nombre Visita</Label>
-                                        <Input id='visitor-name' placeholder="Nombre completo" value={visitorName} onChange={(e) => setVisitorName(e.target.value)} />
+                                        <Input id='visitor-name' placeholder="Nombre completo" value={visitorName} onChange={(e) => setVisitorName(e.target.value)} disabled={isUserLoading}/>
                                     </div>
                                     <div className="grid gap-2">
                                         <Label htmlFor='visitor-company'>Empresa</Label>
                                         <div className="flex items-center gap-2">
-                                            <Input id='visitor-company' placeholder="Nombre de la empresa" className="w-full" value={visitorCompany} onChange={(e) => setVisitorCompany(e.target.value)} />
-                                            <Button variant="outline" size="icon" onClick={() => setIsFavorite(!isFavorite)}>
+                                            <Input id='visitor-company' placeholder="Nombre de la empresa" className="w-full" value={visitorCompany} onChange={(e) => setVisitorCompany(e.target.value)} disabled={isUserLoading}/>
+                                            <Button variant="outline" size="icon" onClick={() => setIsFavorite(!isFavorite)} disabled={isUserLoading}>
                                                 <Star className={cn("h-4 w-4", isFavorite ? "fill-primary text-primary" : "")} />
                                             </Button>
                                         </div>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-4 mt-4">
-                                    <Button onClick={handleVisitorEntry} className='w-full'>
+                                    <Button onClick={handleVisitorEntry} className='w-full' disabled={isUserLoading}>
                                         <UserPlus className='mr-2'/>
                                         Registrar Visita
                                     </Button>
