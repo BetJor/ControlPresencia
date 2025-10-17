@@ -9,6 +9,12 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import {
+    Accordion,
+    AccordionContent,
+    AccordionItem,
+    AccordionTrigger,
+  } from "@/components/ui/accordion"
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -40,63 +46,73 @@ export default function PunchClock() {
 
   return (
     <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="font-headline flex items-center gap-2">
-          <Edit className="h-6 w-6" />
-          Recepción
-        </CardTitle>
-        <CardDescription className="max-w-lg text-balance leading-relaxed">
-          Registra una entrada manual para un empleado o una nueva visita.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-6">
-        {/* Manual Punch for Employee */}
-        <div>
-          <h3 className="mb-2 font-medium flex items-center gap-2"><Fingerprint className='h-5 w-5' /> Fichaje Manual Empleado</h3>
-          <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="employee-select">Empleado</Label>
-                <Select>
-                  <SelectTrigger id='employee-select'>
-                    <SelectValue placeholder="Seleccionar Empleado" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {mockEmployees.map((employee) => (
-                      <SelectItem key={employee.id} value={employee.id}>
-                        {employee.name} {employee.cognoms}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            <div className='grid gap-2'>
-                <Label>&nbsp;</Label>
-                <Button onClick={handleManualPunch} className='w-full'>
-                    Registrar Fichaje
-                </Button>
-            </div>
-          </div>
-        </div>
+        <CardHeader>
+            <Accordion type="single" collapsible defaultValue='item-1' className='-m-6'>
+                <AccordionItem value="item-1" className='border-0'>
+                    <AccordionTrigger className='p-6 hover:no-underline'>
+                        <div className="text-left">
+                            <CardTitle className="font-headline flex items-center gap-2">
+                                <Edit className="h-6 w-6" />
+                                Recepción
+                            </CardTitle>
+                            <CardDescription className="max-w-lg text-balance leading-relaxed mt-1.5">
+                                Registra una entrada manual para un empleado o una nueva visita.
+                            </CardDescription>
+                        </div>
+                    </AccordionTrigger>
+                    <AccordionContent className='p-6 pt-0'>
+                        <div className="grid gap-6">
+                            {/* Manual Punch for Employee */}
+                            <div>
+                            <h3 className="mb-2 font-medium flex items-center gap-2"><Fingerprint className='h-5 w-5' /> Fichaje Manual Empleado</h3>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="grid gap-2">
+                                    <Label htmlFor="employee-select">Empleado</Label>
+                                    <Select>
+                                    <SelectTrigger id='employee-select'>
+                                        <SelectValue placeholder="Seleccionar Empleado" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {mockEmployees.map((employee) => (
+                                        <SelectItem key={employee.id} value={employee.id}>
+                                            {employee.name} {employee.cognoms}
+                                        </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className='grid gap-2'>
+                                    <Label>&nbsp;</Label>
+                                    <Button onClick={handleManualPunch} className='w-full'>
+                                        Registrar Fichaje
+                                    </Button>
+                                </div>
+                            </div>
+                            </div>
 
-        {/* Visitor Entry */}
-        <div>
-          <h3 className="mb-2 font-medium flex items-center gap-2"><Contact className='h-5 w-5' /> Entrada de Visita</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="grid gap-2">
-                <Label htmlFor='visitor-name'>Nombre Visita</Label>
-                <Input id='visitor-name' placeholder="Nombre completo" />
-            </div>
-            <div className="grid gap-2">
-                <Label htmlFor='visitor-company'>Empresa</Label>
-                <Input id='visitor-company' placeholder="Nombre de la empresa" />
-            </div>
-          </div>
-           <Button onClick={handleVisitorEntry} className='mt-4 w-full'>
-                <UserPlus className='mr-2'/>
-                Registrar Visita
-            </Button>
-        </div>
-      </CardContent>
+                            {/* Visitor Entry */}
+                            <div>
+                            <h3 className="mb-2 font-medium flex items-center gap-2"><Contact className='h-5 w-5' /> Entrada de Visita</h3>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="grid gap-2">
+                                    <Label htmlFor='visitor-name'>Nombre Visita</Label>
+                                    <Input id='visitor-name' placeholder="Nombre completo" />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor='visitor-company'>Empresa</Label>
+                                    <Input id='visitor-company' placeholder="Nombre de la empresa" />
+                                </div>
+                            </div>
+                            <Button onClick={handleVisitorEntry} className='mt-4 w-full'>
+                                    <UserPlus className='mr-2'/>
+                                    Registrar Visita
+                                </Button>
+                            </div>
+                        </div>
+                    </AccordionContent>
+                </AccordionItem>
+            </Accordion>
+      </CardHeader>
     </Card>
   );
 }
