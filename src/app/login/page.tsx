@@ -1,38 +1,39 @@
 'use client';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
 import { Clock } from "lucide-react";
 import Image from "next/image";
-import Link from "next/link";
-import { useAuth, useUser, initiateEmailSignIn } from '@/firebase';
+import { useAuth, useUser, initiateAnonymousSignIn } from '@/firebase';
 import { useRouter } from 'next/navigation';
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
 
 export default function LoginPage() {
   const loginBg = PlaceHolderImages.find(p => p.id === 'login-background');
   const auth = useAuth();
   const { user, isUserLoading } = useUser();
   const router = useRouter();
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   useEffect(() => {
+    // If the user is logged in, redirect to the dashboard.
     if (user) {
       router.push('/dashboard');
     }
   }, [user, router]);
 
-  const handleLogin = () => {
-    // For now, we'll use a hardcoded user for demo purposes.
-    initiateEmailSignIn(auth, 'admin@example.com', 'password');
+  const handleAnonymousLogin = () => {
+    setIsLoggingIn(true);
+    initiateAnonymousSignIn(auth);
   };
-
-  if (isUserLoading || user) {
+  
+  // Show a loading state while checking for user or during login process
+  if (isUserLoading || isLoggingIn || user) {
     return (
         <div className="flex items-center justify-center min-h-screen">
             <div className="flex flex-col items-center gap-4">
-                <Clock className="h-12 w-12 text-primary animate-spin" />
+                <Loader2 className="h-12 w-12 text-primary animate-spin" />
                 <p className="text-muted-foreground">Cargando...</p>
             </div>
         </div>
@@ -49,44 +50,13 @@ export default function LoginPage() {
               <h1 className="text-3xl font-bold font-headline">Clockwork</h1>
             </div>
             <p className="text-balance text-muted-foreground">
-              Introduce tu correo electrónico para acceder a tu cuenta
+              Pulsa el botón para acceder a la aplicación.
             </p>
           </div>
           <div className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="email">Correo electrónico</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="m@example.com"
-                required
-                defaultValue="admin@example.com"
-              />
-            </div>
-            <div className="grid gap-2">
-              <div className="flex items-center">
-                <Label htmlFor="password">Contraseña</Label>
-                <Link
-                  href="#"
-                  className="ml-auto inline-block text-sm underline"
-                >
-                  ¿Has olvidado tu contraseña?
-                </Link>
-              </div>
-              <Input id="password" type="password" required defaultValue="password" />
-            </div>
-            <Button type="submit" className="w-full" onClick={handleLogin}>
-              Acceder
+            <Button onClick={handleAnonymousLogin} className="w-full">
+              Acceder como invitado
             </Button>
-            <Button variant="outline" className="w-full">
-              Acceder con Google
-            </Button>
-          </div>
-          <div className="mt-4 text-center text-sm">
-            ¿No tienes una cuenta?{" "}
-            <Link href="#" className="underline">
-              Regístrate
-            </Link>
           </div>
         </div>
       </div>
