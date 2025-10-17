@@ -263,7 +263,7 @@ export default function PresentPeopleList() {
                       <TableRow key={`emp-${employee.id}`}>
                         <TableCell>
                           <div className="font-medium">
-                            {employee.name} {employee.cognoms}
+                            {employee.firstName} {employee.lastName}
                           </div>
                         </TableCell>
                         <TableCell className="hidden sm:table-cell">

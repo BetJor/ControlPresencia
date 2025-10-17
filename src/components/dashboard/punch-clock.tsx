@@ -159,7 +159,7 @@ export default function PunchClock() {
                                             disabled={isLoading}
                                         >
                                             {employeeValue
-                                            ? mockEmployees.find((employee) => `${employee.name.toLowerCase()} ${employee.cognoms.toLowerCase()}` === employeeValue)?.name + ' ' + mockEmployees.find((employee) => `${employee.name.toLowerCase()} ${employee.cognoms.toLowerCase()}` === employeeValue)?.cognoms
+                                            ? mockEmployees.find((employee) => `${employee.firstName.toLowerCase()} ${employee.lastName.toLowerCase()}` === employeeValue)?.firstName + ' ' + mockEmployees.find((employee) => `${employee.firstName.toLowerCase()} ${employee.lastName.toLowerCase()}` === employeeValue)?.lastName
                                             : "Seleccionar empleado..."}
                                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                         </Button>
@@ -172,7 +172,7 @@ export default function PunchClock() {
                                             {mockEmployees.map((employee) => (
                                                 <CommandItem
                                                 key={employee.id}
-                                                value={`${employee.name.toLowerCase()} ${employee.cognoms.toLowerCase()}`}
+                                                value={`${employee.firstName.toLowerCase()} ${employee.lastName.toLowerCase()}`}
                                                 onSelect={(currentValue) => {
                                                     setEmployeeValue(currentValue === employeeValue ? "" : currentValue)
                                                     setEmployeeOpen(false)
@@ -181,10 +181,10 @@ export default function PunchClock() {
                                                 <Check
                                                     className={cn(
                                                     "mr-2 h-4 w-4",
-                                                    employeeValue === `${employee.name.toLowerCase()} ${employee.cognoms.toLowerCase()}` ? "opacity-100" : "opacity-0"
+                                                    employeeValue === `${employee.firstName.toLowerCase()} ${employee.lastName.toLowerCase()}` ? "opacity-100" : "opacity-0"
                                                     )}
                                                 />
-                                                {employee.name} {employee.cognoms}
+                                                {employee.firstName} {employee.lastName}
                                                 </CommandItem>
                                             ))}
                                             </CommandGroup>

@@ -2,8 +2,8 @@ import { Timestamp } from "firebase/firestore";
 
 export type Employee = {
   id: string;
-  name: string;
-  cognoms: string; // Surname
+  firstName: string;
+  lastName: string;
   role: 'admin' | 'standard';
   avatarUrl: string;
 };

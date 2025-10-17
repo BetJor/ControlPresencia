@@ -2,10 +2,10 @@ import type { Employee, Terminal, Incident, Punch, Visitor } from './types';
 import { PlaceHolderImages } from './placeholder-images';
 
 export const mockEmployees: Employee[] = [
-  { id: 'E1', name: 'Sarah', cognoms: 'Johnson', role: 'admin', avatarUrl: PlaceHolderImages.find(p => p.id === 'user1')?.imageUrl || '' },
-  { id: 'E2', name: 'Michael', cognoms: 'Smith', role: 'standard', avatarUrl: PlaceHolderImages.find(p => p.id === 'user2')?.imageUrl || '' },
-  { id: 'E3', name: 'Emily', cognoms: 'Davis', role: 'standard', avatarUrl: PlaceHolderImages.find(p => p.id === 'user3')?.imageUrl || '' },
-  { id: 'E4', name: 'David', cognoms: 'Chen', role: 'standard', avatarUrl: PlaceHolderImages.find(p => p.id === 'user4')?.imageUrl || '' },
+  { id: 'E1', firstName: 'Sarah', lastName: 'Johnson', role: 'admin', avatarUrl: PlaceHolderImages.find(p => p.id === 'user1')?.imageUrl || '' },
+  { id: 'E2', firstName: 'Michael', lastName: 'Smith', role: 'standard', avatarUrl: PlaceHolderImages.find(p => p.id === 'user2')?.imageUrl || '' },
+  { id: 'E3', firstName: 'Emily', lastName: 'Davis', role: 'standard', avatarUrl: PlaceHolderImages.find(p => p.id === 'user3')?.imageUrl || '' },
+  { id: 'E4', firstName: 'David', lastName: 'Chen', role: 'standard', avatarUrl: PlaceHolderImages.find(p => p.id === 'user4')?.imageUrl || '' },
 ];
 
 export const mockTerminals: Terminal[] = [
