@@ -24,9 +24,11 @@ export default function DirectoryPage() {
     const [departmentOpen, setDepartmentOpen] = useState(false);
     
     // Pagination state
-    const [paginationDirection, setPaginationDirection] = useState<'next' | 'prev' | null>(null);
-    const [pageCursors, setPageCursors] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]);
-    const [currentPageIndex, setCurrentPageIndex] = useState(0);
+    const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+    const [firstVisible, setFirstVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+    const [page, setPage] = useState(1);
+    const [pageHistory, setPageHistory] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]);
+
 
     const allDepartmentsCollection = useMemoFirebase(() => {
         if (!firestore) return null;
@@ -37,7 +39,7 @@ export default function DirectoryPage() {
     const departments = useMemo(() => {
         if (!allEmployeesForDepts) return [];
         const allDepartments = allEmployeesForDepts.map(employee => employee.departament).filter(Boolean);
-        return [...new Set(allDepartments)];
+        return [...new Set(allDepartments)].sort();
     }, [allEmployeesForDepts]);
     
     const directoriQuery = useMemoFirebase(() => {
@@ -51,84 +53,68 @@ export default function DirectoryPage() {
         }
 
         if (nameFilter) {
-            const nameFilterLower = nameFilter.toLowerCase();
-            const nameEnd = nameFilterLower + '\uf8ff';
-            conditions.push(
-                or(
-                    and(where('nom', '>=', nameFilter), where('nom', '<', nameFilter + '\uf8ff')),
-                    and(where('cognom', '>=', nameFilter), where('cognom', '<', nameFilter + '\uf8ff'))
-                )
-            );
+            const nameEnd = nameFilter.toLowerCase() + '\uf8ff';
+            conditions.push(or(
+                and(where('nom', '>=', nameFilter), where('nom', '<', nameEnd)),
+                and(where('cognom', '>=', nameFilter), where('cognom', '<', nameEnd))
+            ));
         }
         
-        const cursor = pageCursors[currentPageIndex];
-        const orderByClauses = [orderBy('nom')];
-        const paginationClauses = [];
-
-        if (cursor) {
-            if (paginationDirection === 'next') {
-                paginationClauses.push(startAfter(cursor));
-            } else if (paginationDirection === 'prev') {
-                // For 'prev', we need to reverse the query order, then reverse the results
-                orderByClauses.unshift(orderBy('nom', 'desc')); // This overrides the previous orderBy
-                paginationClauses.push(startAfter(cursor));
-            }
-        }
-        
-        const finalQueryParts = [
+        const q = query(
             baseCollection,
             ...conditions,
-            ...orderByClauses,
-            limit(PAGE_SIZE + 1), // Fetch one extra to see if there's a next page
-            ...paginationClauses
-        ];
+            orderBy('nom'),
+            limit(PAGE_SIZE + 1),
+             ...(page > 1 && lastVisible ? [startAfter(lastVisible)] : [])
+        );
 
-        // This is a hack to get around the issue of having multiple orderBy clauses with the same field
-        if (paginationDirection === 'prev') {
-             finalQueryParts.splice(2, 1);
+        return q;
+
+    }, [firestore, departmentFilter, nameFilter, lastVisible, page]);
+
+
+    const { data, isLoading: isLoadingData } = useCollection<Directori>(directoriQuery, {
+      onNewData: (snapshot) => {
+        if (snapshot && !snapshot.empty) {
+            setFirstVisible(snapshot.docs[0]);
+            setLastVisible(snapshot.docs[snapshot.docs.length - 1]);
+        } else {
+            setFirstVisible(null);
+            setLastVisible(null);
         }
-
-        return query.apply(null, finalQueryParts as any);
-
-    }, [firestore, departmentFilter, nameFilter, currentPageIndex, pageCursors, paginationDirection]);
-
-
-    const { data, isLoading: isLoadingData } = useCollection<Directori>(directoriQuery);
+      }
+    });
 
     const employees = useMemo(() => {
         if (!data) return [];
-        const records = paginationDirection === 'prev' ? data.slice(0, PAGE_SIZE).reverse() : data.slice(0, PAGE_SIZE);
-        return records;
-    }, [data, paginationDirection]);
+        return data.slice(0, PAGE_SIZE);
+    }, [data]);
 
     const hasNextPage = data ? data.length > PAGE_SIZE : false;
-    const hasPrevPage = currentPageIndex > 0;
+    const hasPrevPage = page > 1;
 
     const handleNextPage = () => {
-        if (employees.length > 0 && hasNextPage) {
-            const lastDoc = data![employees.length - 1] as any;
-             setPageCursors(prev => {
-                const newCursors = [...prev];
-                newCursors[currentPageIndex + 1] = lastDoc;
-                return newCursors;
-            });
-            setPaginationDirection('next');
-            setCurrentPageIndex(prev => prev + 1);
+        if (hasNextPage) {
+            setPageHistory(prev => [...prev, lastVisible]);
+            setPage(prev => prev + 1);
         }
     };
     
     const handlePrevPage = () => {
-        if (currentPageIndex > 0) {
-            setPaginationDirection('prev');
-            setCurrentPageIndex(prev => prev - 1);
+        if (hasPrevPage) {
+            const prevLastVisible = pageHistory[page - 2] || null;
+            setLastVisible(prevLastVisible);
+            setPageHistory(prev => prev.slice(0, -1));
+            setPage(prev => prev - 1);
         }
     };
     
     // Reset pagination when filters change
     useMemo(() => {
-        setCurrentPageIndex(0);
-        setPageCursors([null]);
-        setPaginationDirection('next');
+        setPage(1);
+        setLastVisible(null);
+        setFirstVisible(null);
+        setPageHistory([null]);
     }, [nameFilter, departmentFilter]);
 
 
