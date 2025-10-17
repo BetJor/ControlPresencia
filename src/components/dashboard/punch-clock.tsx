@@ -2,9 +2,9 @@
 import * as React from "react"
 import { Button } from '@/components/ui/button';
 import {
-  CardContent,
   CardDescription,
   CardHeader,
+  CardTitle,
 } from '@/components/ui/card';
 import {
     Accordion,
@@ -20,12 +20,18 @@ import { Label } from '../ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
-import { Card, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
+import { useFirestore, addDocumentNonBlocking } from "@/firebase";
+import { collection, serverTimestamp } from "firebase/firestore";
 
 export default function PunchClock() {
   const { toast } = useToast();
   const [open, setOpen] = React.useState(false)
   const [value, setValue] = React.useState("")
+  const [visitorName, setVisitorName] = React.useState("");
+  const [visitorCompany, setVisitorCompany] = React.useState("");
+  const [isFavorite, setIsFavorite] = React.useState(false);
+  const firestore = useFirestore();
 
   const handleManualPunch = () => {
     toast({
@@ -35,10 +41,40 @@ export default function PunchClock() {
   };
 
   const handleVisitorEntry = () => {
+    if (!visitorName || !visitorCompany) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "El nombre y la empresa de la visita son obligatorios.",
+      });
+      return;
+    }
+
+    const visitData = {
+      name: visitorName,
+      company: visitorCompany,
+      timestamp: serverTimestamp(),
+    };
+
+    addDocumentNonBlocking(collection(firestore, 'visit_registrations'), visitData);
+
+    if (isFavorite) {
+      const favoriteVisitorData = {
+        name: visitorName,
+        company: visitorCompany,
+      };
+      addDocumentNonBlocking(collection(firestore, 'favorite_visitors'), favoriteVisitorData);
+    }
+
      toast({
       title: 'Visita Registrada',
       description: 'La entrada de la visita ha sido registrada con éxito.',
     });
+
+    // Reset fields
+    setVisitorName("");
+    setVisitorCompany("");
+    setIsFavorite(false);
   }
 
   return (
@@ -122,14 +158,14 @@ export default function PunchClock() {
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="grid gap-2">
                                         <Label htmlFor='visitor-name'>Nombre Visita</Label>
-                                        <Input id='visitor-name' placeholder="Nombre completo" />
+                                        <Input id='visitor-name' placeholder="Nombre completo" value={visitorName} onChange={(e) => setVisitorName(e.target.value)} />
                                     </div>
                                     <div className="grid gap-2">
                                         <Label htmlFor='visitor-company'>Empresa</Label>
                                         <div className="flex items-center gap-2">
-                                            <Input id='visitor-company' placeholder="Nombre de la empresa" className="w-full" />
-                                            <Button variant="outline" size="icon">
-                                                <Star className="h-4 w-4" />
+                                            <Input id='visitor-company' placeholder="Nombre de la empresa" className="w-full" value={visitorCompany} onChange={(e) => setVisitorCompany(e.target.value)} />
+                                            <Button variant="outline" size="icon" onClick={() => setIsFavorite(!isFavorite)}>
+                                                <Star className={cn("h-4 w-4", isFavorite ? "fill-primary text-primary" : "")} />
                                             </Button>
                                         </div>
                                     </div>
