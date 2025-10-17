@@ -16,68 +16,87 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { mockIncidents, mockTerminals } from '@/lib/mock-data';
-import { Clock, Fingerprint } from 'lucide-react';
+import { mockEmployees } from '@/lib/mock-data';
+import { Contact, Edit, Fingerprint, UserPlus } from 'lucide-react';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
 
 export default function PunchClock() {
   const { toast } = useToast();
 
-  const handlePunch = () => {
+  const handleManualPunch = () => {
     toast({
-      title: 'Fichaje Registrado',
-      description: `Tu fichaje a las ${new Date().toLocaleTimeString()} ha sido registrado con éxito.`,
+      title: 'Fichaje Manual Registrado',
+      description: 'El fichaje manual ha sido registrado con éxito.',
     });
   };
+
+  const handleVisitorEntry = () => {
+     toast({
+      title: 'Visita Registrada',
+      description: 'La entrada de la visita ha sido registrada con éxito.',
+    });
+  }
 
   return (
     <Card className="sm:col-span-2">
       <CardHeader className="pb-3">
         <CardTitle className="font-headline flex items-center gap-2">
-          <Clock className="h-6 w-6" />
-          Fichaje en Tiempo Real
+          <Edit className="h-6 w-6" />
+          Recepción
         </CardTitle>
         <CardDescription className="max-w-lg text-balance leading-relaxed">
-          Selecciona un terminal y una incidencia opcional para registrar tu entrada o salida.
+          Registra una entrada manual para un empleado o una nueva visita.
         </CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="grid gap-2">
-            <Select>
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar Terminal" />
-              </SelectTrigger>
-              <SelectContent>
-                {mockTerminals.map((terminal) => (
-                  <SelectItem key={terminal.id} value={terminal.id}>
-                    {terminal.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-2">
-            <Select>
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar Incidencia (Opcional)" />
-              </SelectTrigger>
-              <SelectContent>
-                {mockIncidents.map((incident) => (
-                  <SelectItem key={incident.id} value={incident.id}>
-                    {incident.description}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+      <CardContent className="grid gap-6">
+        {/* Manual Punch for Employee */}
+        <div>
+          <h3 className="mb-2 font-medium flex items-center gap-2"><Fingerprint className='h-5 w-5' /> Fichaje Manual Empleado</h3>
+          <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="employee-select">Empleado</Label>
+                <Select>
+                  <SelectTrigger id='employee-select'>
+                    <SelectValue placeholder="Seleccionar Empleado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {mockEmployees.map((employee) => (
+                      <SelectItem key={employee.id} value={employee.id}>
+                        {employee.name} {employee.cognoms}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            <div className='grid gap-2'>
+                <Label>&nbsp;</Label>
+                <Button onClick={handleManualPunch} className='w-full'>
+                    Registrar Fichaje
+                </Button>
+            </div>
           </div>
         </div>
+
+        {/* Visitor Entry */}
+        <div>
+          <h3 className="mb-2 font-medium flex items-center gap-2"><Contact className='h-5 w-5' /> Entrada de Visita</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-2">
+                <Label htmlFor='visitor-name'>Nombre Visita</Label>
+                <Input id='visitor-name' placeholder="Nombre completo" />
+            </div>
+            <div className="grid gap-2">
+                <Label htmlFor='visitor-company'>Empresa</Label>
+                <Input id='visitor-company' placeholder="Nombre de la empresa" />
+            </div>
+          </div>
+           <Button onClick={handleVisitorEntry} className='mt-4 w-full'>
+                <UserPlus className='mr-2'/>
+                Registrar Visita
+            </Button>
+        </div>
       </CardContent>
-      <CardFooter>
-        <Button onClick={handlePunch}>
-          <Fingerprint className="mr-2 h-4 w-4" />
-          Fichar
-        </Button>
-      </CardFooter>
     </Card>
   );
 }

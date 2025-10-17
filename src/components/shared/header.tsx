@@ -7,6 +7,7 @@ import {
   Settings,
   Clock,
   PanelLeft,
+  Contact,
 } from 'lucide-react';
 import {
   Breadcrumb,
@@ -56,6 +57,10 @@ export default function Header() {
             <Link href="/employees" className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground">
               <Users className="h-5 w-5" />
               Empleados
+            </Link>
+            <Link href="/visitors" className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground">
+              <Contact className="h-5 w-5" />
+              Visitas
             </Link>
             <Link href="/terminals" className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground">
               <Computer className="h-5 w-5" />

@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/table';
 import { mockEmployees, mockIncidents, mockPunches, mockTerminals } from '@/lib/mock-data';
 import type { PunchWithDetails } from '@/lib/types';
-import { List } from 'lucide-react';
+import { List, Edit } from 'lucide-react';
 
 const getPunchDetails = (): PunchWithDetails[] => {
     const today = new Date();
@@ -82,6 +82,9 @@ export default function PunchLog() {
                     {punch.timestamp.toLocaleTimeString()}
                     {punch.incident && (
                         <Badge variant="destructive" className="ml-2">{punch.incident.code}</Badge>
+                    )}
+                     {punch.isManual && (
+                        <Badge variant="outline" className="ml-2"><Edit className="h-3 w-3 mr-1"/>Manual</Badge>
                     )}
                 </TableCell>
                 <TableCell className="hidden md:table-cell">{punch.terminal.name}</TableCell>

@@ -6,6 +6,13 @@ export type Employee = {
   avatarUrl: string;
 };
 
+export type Visitor = {
+  id: string;
+  name: string;
+  company: string;
+  timestamp: Date;
+};
+
 export type Terminal = {
   id: string;
   name: string;
@@ -24,6 +31,7 @@ export type Punch = {
   terminalId: string;
   incidentId?: string;
   timestamp: Date;
+  isManual?: boolean;
 };
 
 export type PunchWithDetails = Punch & {

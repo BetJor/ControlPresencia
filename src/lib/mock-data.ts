@@ -1,4 +1,4 @@
-import type { Employee, Terminal, Incident, Punch } from './types';
+import type { Employee, Terminal, Incident, Punch, Visitor } from './types';
 import { PlaceHolderImages } from './placeholder-images';
 
 export const mockEmployees: Employee[] = [
@@ -33,6 +33,11 @@ export const mockPunches: Punch[] = [
   { id: 'P3', employeeId: 'E3', terminalId: 'T2', timestamp: setTime(today, 8, 15), incidentId: 'I1' },
   { id: 'P4', employeeId: 'E1', terminalId: 'T1', timestamp: setTime(today, 12, 30) },
   { id: 'P5', employeeId: 'E2', terminalId: 'T1', timestamp: setTime(today, 12, 32) },
-  { id: 'P6', employeeId: 'E1', terminalId: 'T1', timestamp: setTime(today, 13, 0) },
+  { id: 'P6', employeeId: 'E1', terminalId: 'T1', timestamp: setTime(today, 13, 0), isManual: true },
   { id: 'P7', employeeId: 'E4', terminalId: 'T3', timestamp: setTime(today, 9, 0) },
+];
+
+export const mockVisitors: Visitor[] = [
+    { id: 'V1', name: 'John Doe', company: 'Acme Inc.', timestamp: setTime(today, 9, 30) },
+    { id: 'V2', name: 'Jane Smith', company: 'Beta Corp.', timestamp: setTime(today, 10, 15) },
 ];
