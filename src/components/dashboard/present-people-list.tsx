@@ -80,7 +80,6 @@ export default async function PresentPeopleList() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[80px]">Avatar</TableHead>
                       <TableHead>Nombre</TableHead>
                       <TableHead className="hidden sm:table-cell">Rol</TableHead>
                       <TableHead className="hidden sm:table-cell">Hora Entrada</TableHead>
@@ -89,12 +88,6 @@ export default async function PresentPeopleList() {
                   <TableBody>
                      {presentStaff.map((employee) => (
                         <TableRow key={`emp-${employee.id}`}>
-                            <TableCell>
-                                <Avatar className="h-10 w-10">
-                                    <AvatarImage src={employee.avatarUrl} alt={employee.name} />
-                                    <AvatarFallback>{employee.name.charAt(0)}{employee.cognoms.charAt(0)}</AvatarFallback>
-                                </Avatar>
-                            </TableCell>
                             <TableCell>
                                 <div className="font-medium">{employee.name} {employee.cognoms}</div>
                             </TableCell>
@@ -125,20 +118,14 @@ export default async function PresentPeopleList() {
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead className="w-[80px]">Avatar</TableHead>
                             <TableHead>Nombre</TableHead>
                             <TableHead className="hidden sm:table-cell">Empresa</TableHead>
-                            <TableHead className="hidden sm:table-cell">Hora Entrada</TableHead>
+                            <TableHead className="hidden smn:table-cell">Hora Entrada</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {presentVisitors.map((visitor) => (
                             <TableRow key={`vis-${visitor.id}`}>
-                                <TableCell>
-                                    <Avatar className="h-10 w-10">
-                                        <AvatarFallback>{visitor.name.charAt(0)}</AvatarFallback>
-                                    </Avatar>
-                                </TableCell>
                                 <TableCell>
                                     <div className="font-medium">{visitor.name}</div>
                                 </TableCell>
