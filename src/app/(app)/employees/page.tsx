@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
-import { collection, query, where, and, or, orderBy, limit, startAfter, QueryDocumentSnapshot, DocumentData } from "firebase/firestore";
+import { collection, query, where, orderBy, limit, startAfter, QueryDocumentSnapshot, DocumentData } from "firebase/firestore";
 import { Loader2, BookUser, Mail, Phone, Search, ChevronsUpDown, Check, XIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -42,7 +42,7 @@ export default function DirectoryPage() {
         if (!firestore) return null;
 
         const baseCollection = collection(firestore, 'directori');
-        let conditions = [];
+        const conditions = [];
 
         if (departmentFilter) {
             conditions.push(where('departament', '==', departmentFilter));
@@ -51,12 +51,8 @@ export default function DirectoryPage() {
         const nameFilterLower = nameFilter.toLowerCase().trim();
         if (nameFilterLower) {
             const nameEnd = nameFilterLower + '\uf8ff';
-            conditions.push(
-                or(
-                    and(where('nom', '>=', nameFilterLower), where('nom', '<=', nameEnd)),
-                    and(where('cognom', '>=', nameFilterLower), where('cognom', '<=', nameEnd))
-                )
-            );
+            conditions.push(where('nom', '>=', nameFilterLower));
+            conditions.push(where('nom', '<=', nameEnd));
         }
 
         const q = query(
@@ -80,14 +76,15 @@ export default function DirectoryPage() {
     const handleNextPage = () => {
         if (hasNextPage && employeesData) {
             const lastDoc = employeesData[employeesData.length - 2];
-            setPaginationCursors(prev => [...prev, lastDoc]);
+            const newCursors = [...paginationCursors];
+            newCursors[currentPage + 1] = lastDoc;
+            setPaginationCursors(newCursors);
             setCurrentPage(prev => prev + 1);
         }
     };
     
     const handlePrevPage = () => {
         if (hasPrevPage) {
-            setPaginationCursors(prev => prev.slice(0, -1));
             setCurrentPage(prev => prev - 1);
         }
     };
