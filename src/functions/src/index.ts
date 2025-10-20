@@ -1,3 +1,4 @@
+'use client';
 import * as functions from 'firebase-functions';
 import { google } from 'googleapis';
 import { initializeApp } from 'firebase-admin/app';
@@ -73,6 +74,11 @@ exports.importarUsuarisAGoogleWorkspace = functions
             customId = user.customSchemas.IOCA.P_CI;
         }
 
+        if (!customId) {
+            console.warn(`Usuari ${user.primaryEmail} no té P_CI. S'ometrà.`);
+            continue; // Si no hi ha ID, no el podem sincronitzar
+        }
+
 
         let empresa = null,
           departament = null,
@@ -121,7 +127,7 @@ exports.importarUsuarisAGoogleWorkspace = functions
 
         // Creem l'objecte final per a Firestore
         const userData = {
-          id: customId || '',
+          id: customId,
           nom: user.name.givenName || '',
           cognom: user.name.familyName || '',
           email: user.primaryEmail,
@@ -138,9 +144,9 @@ exports.importarUsuarisAGoogleWorkspace = functions
           suspès: user.suspended || false,
         };
 
-        // Afegim l'operació al batch
-        const userRef = db.collection('directori').doc(user.primaryEmail);
-        batch.set(userRef, userData, { merge: true }); // {merge: true} per no sobreescriure camps existents si no cal
+        // Afegim l'operació al batch. L'ID del document serà el P_CI.
+        const userRef = db.collection('directori').doc(customId);
+        batch.set(userRef, userData, { merge: true });
       }
 
       // 3. Executar totes les escriptures a Firestore
@@ -226,9 +232,9 @@ exports.sincronitzarPersonalPresent = functions
 
       for (const fitxatge of fitxatges) {
         const dateStr = fitxatge['Fecha y Hora'] || fitxatge['Data'];
-        const employeeEmail = fitxatge.USEREMAIL;
+        const employeeId = fitxatge.P_CI;
 
-        if (!dateStr || typeof dateStr !== 'string' || !employeeEmail) {
+        if (!dateStr || typeof dateStr !== 'string' || !employeeId) {
           continue;
         }
 
@@ -236,17 +242,17 @@ exports.sincronitzarPersonalPresent = functions
         const date = new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]), parseInt(parts[3]), parseInt(parts[4]), parseInt(parts[5]));
 
         if (date >= today) {
-          if (!userPunches[employeeEmail]) {
-            userPunches[employeeEmail] = [];
+          if (!userPunches[employeeId]) {
+            userPunches[employeeId] = [];
           }
-          userPunches[employeeEmail].push({ ...fitxatge, parsedDate: date });
+          userPunches[employeeId].push({ ...fitxatge, parsedDate: date });
         }
       }
       
-      const presentUserEmails = new Set<string>();
-      for (const email in userPunches) {
-        if (userPunches[email].length % 2 !== 0) {
-          presentUserEmails.add(email);
+      const presentUserIds = new Set<string>();
+      for (const employeeId in userPunches) {
+        if (userPunches[employeeId].length % 2 !== 0) {
+          presentUserIds.add(employeeId);
         }
       }
 
@@ -257,29 +263,33 @@ exports.sincronitzarPersonalPresent = functions
       const usuarisDinsSnapshot = await usuarisDinsCollection.get();
       const usuarisDinsActuals = new Set(usuarisDinsSnapshot.docs.map(doc => doc.id));
 
-      const usuarisPerEliminar = [...usuarisDinsActuals].filter(email => !presentUserEmails.has(email));
-      const usuarisPerAfegirOActualitzar = [...presentUserEmails];
+      const usuarisPerEliminar = [...usuarisDinsActuals].filter(id => !presentUserIds.has(id));
+      const usuarisPerAfegirOActualitzar = [...presentUserIds];
 
       const batch = db.batch();
 
       // Eliminar usuaris que ja no estan presents
-      for (const email of usuarisPerEliminar) {
-        batch.delete(usuarisDinsCollection.doc(email));
+      for (const id of usuarisPerEliminar) {
+        batch.delete(usuarisDinsCollection.doc(id));
       }
 
       // Afegir o actualitzar usuaris presents
       if (usuarisPerAfegirOActualitzar.length > 0) {
-          const directoriSnapshot = await directoriCollection.where('email', 'in', usuarisPerAfegirOActualitzar).get();
+          const directoriQuery = directoriCollection.where('id', 'in', usuarisPerAfegirOActualitzar);
+          const directoriSnapshot = await directoriQuery.get();
           
           const directoriMap = new Map();
           directoriSnapshot.forEach(doc => {
-              directoriMap.set(doc.id, doc.data());
+              const data = doc.data();
+              if(data.id) {
+                directoriMap.set(data.id, data);
+              }
           });
 
-          for (const email of usuarisPerAfegirOActualitzar) {
-              const employeeDetails = directoriMap.get(email);
+          for (const employeeId of usuarisPerAfegirOActualitzar) {
+              const employeeDetails = directoriMap.get(employeeId);
               if (employeeDetails) {
-                  const userSpecificPunches = userPunches[email].sort((a, b) => b.parsedDate - a.parsedDate);
+                  const userSpecificPunches = userPunches[employeeId].sort((a, b) => b.parsedDate - a.parsedDate);
                   const lastPunch = userSpecificPunches[0];
 
                   const dataToSet = {
@@ -288,7 +298,9 @@ exports.sincronitzarPersonalPresent = functions
                       horaDarreraEntrada: Timestamp.fromDate(lastPunch.parsedDate),
                   };
                   
-                  batch.set(usuarisDinsCollection.doc(email), dataToSet, { merge: true });
+                  batch.set(usuarisDinsCollection.doc(employeeId), dataToSet, { merge: true });
+              } else {
+                console.warn(`No s'han trobat detalls al directori per a l'empleat amb P_CI: ${employeeId}`);
               }
           }
       }
