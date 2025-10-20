@@ -114,7 +114,7 @@ export default function VisitorsPage() {
             <div className="fixed bottom-6 right-6">
                 <FavoriteVisitorForm>
                     <Button size="icon" className="rounded-full h-14 w-14 shadow-lg">
-                        <Plus className="h-6 w-6" />
+                        <Plus className="h-8 w-8" />
                         <span className="sr-only">Añadir Visita Favorita</span>
                     </Button>
                 </FavoriteVisitorForm>
