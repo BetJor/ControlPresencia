@@ -49,11 +49,8 @@ export default function DirectoryPage() {
         
         const nameFilterTrimmed = nameFilter.trim();
         if (nameFilterTrimmed) {
-            const nameEnd = nameFilterTrimmed.slice(0, -1) + String.fromCharCode(nameFilterTrimmed.charCodeAt(nameFilterTrimmed.length - 1) + 1);
-            constraints.push(and(
-                where('nom', '>=', nameFilterTrimmed),
-                where('nom', '<', nameEnd)
-            ));
+            constraints.push(where('nom', '>=', nameFilterTrimmed));
+            constraints.push(where('nom', '<=', nameFilterTrimmed + '\uf8ff'));
         }
 
         const q = query(
