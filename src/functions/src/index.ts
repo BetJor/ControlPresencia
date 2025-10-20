@@ -3,6 +3,7 @@ import { google } from 'googleapis';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { onCall } from "firebase-functions/v2/https";
+import fetch from "node-fetch";
 
 initializeApp();
 
@@ -148,6 +149,7 @@ exports.importarUsuarisAGoogleWorkspace = functions
 
 
 exports.getDadesAppSheet = onCall({ region: "europe-west1", memory: "1GiB", timeoutSeconds: 60}, async (request) => {
+  // Aquesta funció crida l'API d'AppSheet per obtenir dades.
   const APP_ID = "78e78850-4bd3-48a6-b9dd-86610de1f4d3";
   const APP_ACCESS_KEY = "V2-LINid-jygnH-4Eqx6-xEe13-kXpTW-ZALoX-yY7yc-q9EMj"; // TODO: Guardar-la a secrets!
 
