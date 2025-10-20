@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCollection, useFirestore, useMemoFirebase, deleteDocumentNonBlocking } from "@/firebase";
 import { collection, doc } from "firebase/firestore";
-import { Loader2, Star, Trash2, Pencil } from "lucide-react";
+import { Loader2, Star, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -17,6 +17,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { EditFavoriteVisitorForm } from "@/components/visitors/edit-visitor-form";
 
 type FavoriteVisitor = {
     id: string;
@@ -72,10 +73,7 @@ export default function VisitorsPage() {
                                     <TableCell>{visitor.company}</TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex justify-end gap-2">
-                                            <Button variant="ghost" size="icon" disabled>
-                                                <Pencil className="h-4 w-4" />
-                                                <span className="sr-only">Editar</span>
-                                            </Button>
+                                            <EditFavoriteVisitorForm visitor={visitor} />
                                             <AlertDialog>
                                                 <AlertDialogTrigger asChild>
                                                     <Button variant="ghost" size="icon">
