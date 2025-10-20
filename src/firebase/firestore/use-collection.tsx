@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Query,
   onSnapshot,
@@ -67,6 +67,12 @@ export function useCollection<T = any>(
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<FirestoreError | Error | null>(null);
 
+  // Use a ref to store the options callback to avoid it being a dependency of useEffect
+  const optionsRef = useRef(options);
+  useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
+
   useEffect(() => {
     if (!memoizedTargetRefOrQuery) {
       setData(null);
@@ -89,7 +95,8 @@ export function useCollection<T = any>(
         setData(results);
         setError(null);
         setIsLoading(false);
-        options?.onNewData?.(snapshot);
+        // Call the latest callback from the ref
+        optionsRef.current?.onNewData?.(snapshot);
       },
       (error: FirestoreError) => {
         // This logic extracts the path from either a ref or a query
@@ -113,7 +120,8 @@ export function useCollection<T = any>(
     );
 
     return () => unsubscribe();
-  }, [memoizedTargetRefOrQuery, options]); // Re-run if the target query/reference changes.
+  }, [memoizedTargetRefOrQuery]); // Re-run only if the target query/reference changes.
+  
   if(memoizedTargetRefOrQuery && !memoizedTargetRefOrQuery.__memo) {
     throw new Error(memoizedTargetRefOrQuery + ' was not properly memoized using useMemoFirebase');
   }
