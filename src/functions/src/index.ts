@@ -1,7 +1,7 @@
 import * as functions from 'firebase-functions';
 import { google } from 'googleapis';
 import { initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { onCall } from "firebase-functions/v2/https";
 import fetch from "node-fetch";
 
@@ -148,7 +148,7 @@ exports.importarUsuarisAGoogleWorkspace = functions
   });
 
 
-exports.getDadesAppSheet = onCall({ region: "europe-west1", memory: "1GiB", timeoutSeconds: 60}, async (request) => {
+exports.getDadesAppSheet = onCall({ region: "europe-west1", memory: "1GiB", timeoutSeconds: 60 }, async (request) => {
   // Aquesta funció crida l'API d'AppSheet per obtenir dades.
   const APP_ID = "94c06d4b-4ed0-49d4-85a9-003710c7038b";
   const APP_ACCESS_KEY = "V2-LINid-jygnH-4Eqx6-xEe13-kXpTW-ZALoX-yY7yc-q9EMj"; // TODO: Guardar-la a secrets!
@@ -182,10 +182,9 @@ exports.getDadesAppSheet = onCall({ region: "europe-west1", memory: "1GiB", time
 
 
 exports.sincronitzarPersonalPresent = functions
-    .region('europe-west1')
-    .pubsub.schedule('every 5 minutes')
-    .onRun(async (context) => {
-
+  .region('europe-west1')
+  .pubsub.schedule('every 5 minutes')
+  .onRun(async (context) => {
     console.log("Iniciant la sincronització de personal present.");
 
     const APP_ID = "94c06d4b-4ed0-49d4-85a9-003710c7038b";
@@ -193,70 +192,94 @@ exports.sincronitzarPersonalPresent = functions
     const db = getFirestore();
 
     try {
-        // 1. Obtenir fitxatges de AppSheet
-        const url = `https://api.appsheet.com/api/v2/apps/${APP_ID}/tables/dbo.Google_EntradasSalidas/Action`;
-        const body = JSON.stringify({ "Action": "Find", "Properties": {}, "Rows": [] });
+      // 1. Obtenir fitxatges de AppSheet
+      const url = `https://api.appsheet.com/api/v2/apps/${APP_ID}/tables/dbo.Google_EntradasSalidas/Action`;
+      const body = JSON.stringify({ "Action": "Find", "Properties": {}, "Rows": [] });
 
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'ApplicationAccessKey': APP_ACCESS_KEY
-            },
-            body: body
-        });
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'ApplicationAccessKey': APP_ACCESS_KEY
+        },
+        body: body
+      });
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error(`Error de l'API d'AppSheet: ${response.status} ${response.statusText}`, errorText);
-            throw new Error(`Error de l'API d'AppSheet: ${response.statusText}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Error de l'API d'AppSheet: ${response.status} ${response.statusText}`, errorText);
+        throw new Error(`Error de l'API d'AppSheet: ${response.statusText}`);
+      }
+
+      const fitxatges: any[] = await response.json() as any[];
+
+      // 2. Processar i calcular usuaris presents
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const userPunches: { [key: string]: any[] } = {};
+
+      for (const fitxatge of fitxatges) {
+        // AppSheet dates are 'MM/DD/YYYY HH:mm:ss'
+        const parts = fitxatge["Data"].split(/[\s/:]+/); // MM, DD, YYYY, HH, mm, ss
+        const date = new Date(parts[2], parts[0] - 1, parts[1], parts[3], parts[4], parts[5]);
+
+        if (date >= today) {
+          const employeeId = fitxatge.P_CI;
+          if (!userPunches[employeeId]) {
+            userPunches[employeeId] = [];
+          }
+          userPunches[employeeId].push({ ...fitxatge, parsedDate: date });
         }
+      }
 
-        const fitxatges: any[] = await response.json() as any[];
+      const presentUsers: { [key: string]: any } = {};
 
-        // 2. Calcular usuaris presents
-        const usuarisCounts: { [key: string]: number } = {};
-        const avui = new Date().toISOString().slice(0, 10);
-
-        for (const fitxatge of fitxatges) {
-            const email = fitxatge.USEREMAIL;
-            const dataFitxatge = fitxatge["Fecha y Hora"].slice(0, 10);
-
-            if (dataFitxatge === avui) {
-                usuarisCounts[email] = (usuarisCounts[email] || 0) + 1;
-            }
+      for (const employeeId in userPunches) {
+        const punches = userPunches[employeeId];
+        if (punches.length % 2 !== 0) { // Odd number of punches means they are in
+          // Find the last punch to get the latest info
+          punches.sort((a, b) => b.parsedDate - a.parsedDate);
+          const lastPunch = punches[0];
+          presentUsers[employeeId] = {
+            nom: lastPunch.Nom,
+            cognoms: lastPunch.Cognoms,
+            horaDarreraEntrada: Timestamp.fromDate(lastPunch.parsedDate),
+          };
         }
+      }
 
-        const usuarisDinsAppSheet = Object.keys(usuarisCounts)
-            .filter(email => usuarisCounts[email] % 2 !== 0);
+      const presentUserIds = Object.keys(presentUsers);
 
-        // 3. Sincronitzar amb Firestore
-        const usuarisDinsFirestoreSnapshot = await db.collection('usuaris_dins').get();
-        const usuarisDinsFirestore = usuarisDinsFirestoreSnapshot.docs.map(doc => doc.id);
+      // 3. Sincronitzar amb Firestore
+      const usuarisDinsFirestoreSnapshot = await db.collection('usuaris_dins').get();
+      const usuarisDinsFirestoreIds = usuarisDinsFirestoreSnapshot.docs.map(doc => doc.id);
 
-        const usuarisPerAfegir = usuarisDinsAppSheet.filter(email => !usuarisDinsFirestore.includes(email));
-        const usuarisPerEliminar = usuarisDinsFirestore.filter(email => !usuarisDinsAppSheet.includes(email));
+      const usuarisPerAfegirOActualitzar = presentUserIds;
+      const usuarisPerEliminar = usuarisDinsFirestoreIds.filter(id => !presentUserIds.includes(id));
 
-        const batch = db.batch();
+      const batch = db.batch();
 
-        for (const email of usuarisPerAfegir) {
-            const docRef = db.collection('usuaris_dins').doc(email);
-            batch.set(docRef, {}); 
-        }
+      // Add or update users who are present
+      for (const userId of usuarisPerAfegirOActualitzar) {
+        const docRef = db.collection('usuaris_dins').doc(userId);
+        batch.set(docRef, presentUsers[userId], { merge: true });
+      }
 
-        for (const email of usuarisPerEliminar) {
-            const docRef = db.collection('usuaris_dins').doc(email);
-            batch.delete(docRef);
-        }
+      // Remove users who are no longer present
+      for (const userId of usuarisPerEliminar) {
+        const docRef = db.collection('usuaris_dins').doc(userId);
+        batch.delete(docRef);
+      }
 
-        await batch.commit();
+      await batch.commit();
 
-        console.log(`Sincronització finalitzada. Afegits: ${usuarisPerAfegir.length}, Eliminats: ${usuarisPerEliminar.length}`);
+      console.log(`Sincronització finalitzada. Presents: ${usuarisPerAfegirOActualitzar.length}, Eliminats: ${usuarisPerEliminar.length}`);
 
-        return null;
+      return null;
 
     } catch (error) {
-        console.error("Error durant la sincronització de personal present:", error);
-        return null;
+      console.error("Error durant la sincronització de personal present:", error);
+      return null;
     }
-});
+  });
