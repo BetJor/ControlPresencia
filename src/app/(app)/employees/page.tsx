@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
-import { collection, query, where, orderBy, limit, startAfter, QueryDocumentSnapshot, DocumentData } from "firebase/firestore";
+import { collection, query, where, orderBy, limit, startAfter, QueryDocumentSnapshot, DocumentData, or } from "firebase/firestore";
 import { Loader2, BookUser, Mail, Phone, Search, ChevronsUpDown, Check, XIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -42,19 +42,27 @@ export default function DirectoryPage() {
         if (!firestore) return null;
 
         let q = query(collection(firestore, 'directori'));
+        
+        const constraints = [];
 
         if (departmentFilter) {
-            q = query(q, where('departament', '==', departmentFilter));
+            constraints.push(where('departament', '==', departmentFilter));
         }
         
-        const nameFilterLower = nameFilter.toLowerCase().trim();
-        if (nameFilterLower) {
-            const nameEnd = nameFilterLower + '\uf8ff';
-            q = query(q, where('nom', '>=', nameFilterLower), where('nom', '<=', nameEnd));
+        const nameFilterTrimmed = nameFilter.trim();
+        if (nameFilterTrimmed) {
+            const nameEnd = nameFilterTrimmed.slice(0, -1) + String.fromCharCode(nameFilterTrimmed.charCodeAt(nameFilterTrimmed.length - 1) + 1);
+            constraints.push(
+                or(
+                    where('nom', '>=', nameFilterTrimmed),
+                    where('nom', '<', nameEnd)
+                )
+            );
         }
 
         q = query(
             q, 
+            ...constraints,
             orderBy('nom'), 
             startAfter(paginationCursors[currentPage] || null),
             limit(PAGE_SIZE + 1)
