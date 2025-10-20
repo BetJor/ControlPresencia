@@ -38,49 +38,85 @@ export default function DirectoryPage() {
         return [...new Set(allDepartments)].sort();
     }, [allEmployeesForDepts]);
     
-    const directoriQuery = useMemoFirebase(() => {
+    // --- Base Query Logic ---
+    const baseQuery = useMemoFirebase(() => {
         if (!firestore) return null;
-
         const constraints = [];
-
         if (departmentFilter) {
             constraints.push(where('departament', '==', departmentFilter));
         }
-        
-        const nameFilterTrimmed = nameFilter.trim();
-        if (nameFilterTrimmed) {
-            constraints.push(where('nom', '>=', nameFilterTrimmed));
-            constraints.push(where('nom', '<=', nameFilterTrimmed + '\uf8ff'));
-        }
+        return query(collection(firestore, 'directori'), ...constraints);
+    }, [firestore, departmentFilter]);
 
-        const q = query(
-            collection(firestore, 'directori'), 
-            ...constraints,
+
+    // --- Pagination Query (when no name filter) ---
+    const paginatedQuery = useMemoFirebase(() => {
+        if (!firestore || !baseQuery || nameFilter) return null; // Only run when there's no name filter
+        return query(
+            baseQuery,
             orderBy('nom'), 
             startAfter(paginationCursors[currentPage] || null),
             limit(PAGE_SIZE + 1)
         );
-        
-        return q;
-    }, [firestore, departmentFilter, nameFilter, currentPage, paginationCursors]);
+    }, [firestore, baseQuery, nameFilter, currentPage, paginationCursors]);
 
+    // --- Name Filter Queries ---
+    const nameFilterQuery = useMemoFirebase(() => {
+        if (!firestore || !baseQuery || !nameFilter) return null;
+        return query(
+            baseQuery, 
+            orderBy('nom'), 
+            where('nom', '>=', nameFilter), 
+            where('nom', '<=', nameFilter + '\uf8ff')
+        );
+    }, [firestore, baseQuery, nameFilter]);
 
-    const { data: employeesData, isLoading: isLoadingData } = useCollection<Directori>(directoriQuery);
+    const lastNameFilterQuery = useMemoFirebase(() => {
+        if (!firestore || !baseQuery || !nameFilter) return null;
+        return query(
+            baseQuery,
+            orderBy('cognom'),
+            where('cognom', '>=', nameFilter),
+            where('cognom', '<=', nameFilter + '\uf8ff')
+        );
+    }, [firestore, baseQuery, nameFilter]);
 
-    const employees = useMemo(() => employeesData?.slice(0, PAGE_SIZE) ?? [], [employeesData]);
-    const hasNextPage = (employeesData?.length ?? 0) > PAGE_SIZE;
-    const hasPrevPage = currentPage > 0;
+    // --- Data Fetching ---
+    const { data: paginatedEmployeesData, isLoading: isLoadingPaginated } = useCollection<Directori>(paginatedQuery, { onNewData: (snapshot) => {
+         if (nameFilter) return;
+         const hasMore = snapshot.docs.length > PAGE_SIZE;
+         if (hasMore && paginatedEmployeesData) {
+            const lastDoc = snapshot.docs[snapshot.docs.length - 2];
+             if (paginationCursors.length <= currentPage + 1) {
+                 const newCursors = [...paginationCursors];
+                 newCursors[currentPage + 1] = lastDoc;
+                 setPaginationCursors(newCursors);
+             }
+         }
+    }});
+    const { data: nameFilteredEmployees, isLoading: isLoadingName } = useCollection<Directori>(nameFilterQuery);
+    const { data: lastNameFilteredEmployees, isLoading: isLoadingLastName } = useCollection<Directori>(lastNameFilterQuery);
 
+    // --- Data Merging & Memoization ---
+    const employees = useMemo(() => {
+        if (nameFilter) {
+            const resultsMap = new Map<string, Directori>();
+            nameFilteredEmployees?.forEach(doc => resultsMap.set(doc.id, doc));
+            lastNameFilteredEmployees?.forEach(doc => resultsMap.set(doc.id, doc));
+            return Array.from(resultsMap.values()).sort((a, b) => a.nom.localeCompare(b.nom));
+        }
+        return paginatedEmployeesData?.slice(0, PAGE_SIZE) ?? [];
+    }, [nameFilter, paginatedEmployeesData, nameFilteredEmployees, lastNameFilteredEmployees]);
+
+    const hasNextPage = !nameFilter && (paginatedEmployeesData?.length ?? 0) > PAGE_SIZE;
+    const hasPrevPage = !nameFilter && currentPage > 0;
+    
     const handleNextPage = () => {
-        if (hasNextPage && employeesData) {
-            const lastDoc = employeesData[employeesData.length - 2]; 
-            const newCursors = [...paginationCursors];
-            newCursors[currentPage + 1] = lastDoc;
-            setPaginationCursors(newCursors);
+        if (hasNextPage) {
             setCurrentPage(prev => prev + 1);
         }
     };
-    
+
     const handlePrevPage = () => {
         if (hasPrevPage) {
             setCurrentPage(prev => prev - 1);
@@ -94,7 +130,7 @@ export default function DirectoryPage() {
 
 
     const currentDepartment = departments.find(dep => dep === departmentFilter)
-    const effectiveIsLoading = isLoadingData || isLoadingDepts;
+    const effectiveIsLoading = isLoadingPaginated || isLoadingDepts || isLoadingName || isLoadingLastName;
 
     return (
         <Card>
@@ -111,7 +147,7 @@ export default function DirectoryPage() {
                         <div className="relative w-full">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input
-                                placeholder="Buscar por nombre..."
+                                placeholder="Buscar por nombre o apellido..."
                                 value={nameFilter}
                                 onChange={(e) => setNameFilter(e.target.value)}
                                 className="pl-10"
@@ -256,26 +292,28 @@ export default function DirectoryPage() {
                             </TableBody>
                         </Table>
                     </div>
-                     <div className="flex justify-end items-center gap-2 pt-4">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={handlePrevPage}
-                            disabled={!hasPrevPage || effectiveIsLoading}
-                        >
-                            <ChevronLeft className="h-4 w-4 mr-1" />
-                            Anterior
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={handleNextPage}
-                            disabled={!hasNextPage || effectiveIsLoading}
-                        >
-                            Siguiente
-                            <ChevronRight className="h-4 w-4 ml-1" />
-                        </Button>
-                    </div>
+                    {!nameFilter && (
+                         <div className="flex justify-end items-center gap-2 pt-4">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handlePrevPage}
+                                disabled={!hasPrevPage || effectiveIsLoading}
+                            >
+                                <ChevronLeft className="h-4 w-4 mr-1" />
+                                Anterior
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handleNextPage}
+                                disabled={!hasNextPage || effectiveIsLoading}
+                            >
+                                Siguiente
+                                <ChevronRight className="h-4 w-4 ml-1" />
+                            </Button>
+                        </div>
+                    )}
                     </>
                 ) : (
                     <div className="text-center text-muted-foreground py-8">
