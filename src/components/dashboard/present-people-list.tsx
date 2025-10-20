@@ -93,7 +93,7 @@ export default function PresentPeopleList() {
 
   const getFormattedTime = (timestamp: any) => {
     if (timestamp && typeof timestamp.toDate === 'function') {
-      return timestamp.toDate().toLocaleTimeString();
+      return timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
     return 'N/A';
   };
@@ -131,29 +131,29 @@ export default function PresentPeopleList() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Nom</TableHead>
-                          <TableHead className="hidden sm:table-cell">
+                          <TableHead className="py-2 px-3">Nom</TableHead>
+                          <TableHead className="hidden sm:table-cell py-2 px-3">
                             Empresa
                           </TableHead>
-                          <TableHead className="hidden sm:table-cell">
+                          <TableHead className="hidden sm:table-cell py-2 px-3">
                             Hora Entrada
                           </TableHead>
-                          <TableHead className="text-right">Accions</TableHead>
+                          <TableHead className="text-right py-2 px-3">Accions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {presentVisitors.map((visitor) => (
-                          <TableRow key={`vis-${visitor.id}`}>
-                            <TableCell>
+                          <TableRow key={`vis-${visitor.id}`} className="text-sm">
+                            <TableCell className="py-2 px-3">
                               <div className="font-medium">{visitor.name}</div>
                             </TableCell>
-                            <TableCell className="hidden sm:table-cell">
+                            <TableCell className="hidden sm:table-cell py-2 px-3">
                               {visitor.company}
                             </TableCell>
-                            <TableCell className="hidden sm:table-cell">
+                            <TableCell className="hidden sm:table-cell py-2 px-3">
                               {getFormattedTime(visitor.timestamp)}
                             </TableCell>
-                            <TableCell className="text-right">
+                            <TableCell className="text-right py-2 px-3">
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button
@@ -162,6 +162,7 @@ export default function PresentPeopleList() {
                                     onClick={() =>
                                       handleVisitorCheckout(visitor.id)
                                     }
+                                    className="h-8 w-8"
                                   >
                                     <LogOut className="h-4 w-4" />
                                   </Button>
@@ -176,7 +177,7 @@ export default function PresentPeopleList() {
                       </TableBody>
                     </Table>
                   ) : (
-                    <div className="p-4 text-center text-muted-foreground">
+                    <div className="p-4 text-center text-muted-foreground text-sm">
                       No hi ha visites a l'oficina.
                     </div>
                   )}
@@ -194,25 +195,25 @@ export default function PresentPeopleList() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Cognoms</TableHead>
-                          <TableHead>Nom</TableHead>
-                          <TableHead className="hidden sm:table-cell">
+                          <TableHead className="py-2 px-3">Cognoms</TableHead>
+                          <TableHead className="py-2 px-3">Nom</TableHead>
+                          <TableHead className="hidden sm:table-cell py-2 px-3">
                             Hora Darrera Entrada
                           </TableHead>
-                          <TableHead className="text-right">Accions</TableHead>
+                          <TableHead className="text-right py-2 px-3">Accions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {presentStaff.map((employee) => (
-                          <TableRow key={`emp-${employee.id}`}>
-                            <TableCell className="font-medium">
+                          <TableRow key={`emp-${employee.id}`} className="text-sm">
+                            <TableCell className="font-medium py-2 px-3">
                               {employee.cognoms}
                             </TableCell>
-                            <TableCell>{employee.nom}</TableCell>
-                            <TableCell className="hidden sm:table-cell">
+                            <TableCell className="py-2 px-3">{employee.nom}</TableCell>
+                            <TableCell className="hidden sm:table-cell py-2 px-3">
                               {getFormattedTime(employee.horaDarreraEntrada)}
                             </TableCell>
-                             <TableCell className="text-right">
+                             <TableCell className="text-right py-2 px-3">
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button
@@ -221,6 +222,7 @@ export default function PresentPeopleList() {
                                     onClick={() =>
                                       handleEmployeeCheckout(employee.id)
                                     }
+                                    className="h-8 w-8"
                                   >
                                     <LogOut className="h-4 w-4" />
                                   </Button>
@@ -235,7 +237,7 @@ export default function PresentPeopleList() {
                       </TableBody>
                     </Table>
                   ) : (
-                    <div className="p-4 text-center text-muted-foreground">
+                    <div className="p-4 text-center text-muted-foreground text-sm">
                       No hi ha empleats a l'oficina.
                     </div>
                   )}
@@ -245,7 +247,7 @@ export default function PresentPeopleList() {
           </TooltipProvider>
         )}
         {totalPresent === 0 && !isLoading && (
-          <div className="pt-4 text-center text-muted-foreground">
+          <div className="pt-4 text-center text-muted-foreground text-sm">
             No hi ha ningú a l'oficina en aquest moment.
           </div>
         )}
