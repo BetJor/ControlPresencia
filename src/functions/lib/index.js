@@ -147,9 +147,17 @@ exports.importarUsuarisAGoogleWorkspace = functions
                 centreCost: centreCost || '',
                 suspès: user.suspended || false,
             };
-            // Afegim l'operació al batch
-            const userRef = db.collection('directori').doc(user.primaryEmail);
-            batch.set(userRef, userData, { merge: true }); // {merge: true} per no sobreescriure camps existents si no cal
+            // Afegim l'operació al batch, utilitzant centreCost com a ID
+            if (centreCost && typeof centreCost === 'string' && centreCost.length > 0) {
+                const userRef = db.collection('directori').doc(centreCost);
+                batch.set(userRef, userData, { merge: true });
+            }
+            else {
+                // Opcionalment, desar igualment l'usuari amb el seu email si no té centre de cost
+                const userRef = db.collection('directori').doc(user.primaryEmail);
+                batch.set(userRef, userData, { merge: true });
+                console.warn(`L'usuari ${user.primaryEmail} no té un centre de cost vàlid, s'utilitzarà el seu email com a ID.`);
+            }
         }
         // 3. Executar totes les escriptures a Firestore
         await batch.commit();
@@ -222,14 +230,16 @@ exports.sincronitzarPersonalPresent = functions
             if (!dateStr || typeof dateStr !== 'string') {
                 continue; // Skip if date is missing or not a string
             }
+            const employeeId = fitxatge.P_CI;
+            if (!employeeId || typeof employeeId !== 'string') {
+                continue;
+            }
             // AppSheet dates are 'MM/DD/YYYY HH:mm:ss'
             const parts = dateStr.split(/[\s/:]+/); // MM, DD, YYYY, HH, mm, ss
+            if (parts.length < 6)
+                continue;
             const date = new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]), parseInt(parts[3]), parseInt(parts[4]), parseInt(parts[5]));
             if (date >= today) {
-                const employeeId = fitxatge.USEREMAIL || fitxatge.P_CI;
-                if (!employeeId || typeof employeeId !== 'string') {
-                    continue;
-                }
                 if (!userPunches[employeeId]) {
                     userPunches[employeeId] = [];
                 }
