@@ -4,10 +4,10 @@ import { useState } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Sheet as SheetIcon } from 'lucide-react';
 import { useFirebaseApp } from '@/firebase';
 
-export default function AppSheetTest() {
+export default function AppSheetPage() {
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -18,6 +18,9 @@ export default function AppSheetTest() {
     setResult(null);
     setError(null);
     try {
+      if (!app) {
+        throw new Error("Firebase app no està inicialitzada.");
+      }
       const functions = getFunctions(app, 'europe-west1');
       const getDadesAppSheet = httpsCallable(functions, 'getDadesAppSheet');
       const response = await getDadesAppSheet();
@@ -32,7 +35,10 @@ export default function AppSheetTest() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Prova de Funció d'AppSheet</CardTitle>
+        <CardTitle className="font-headline flex items-center gap-2">
+            <SheetIcon className="h-6 w-6" />
+            Prova de Funció d'AppSheet
+        </CardTitle>
         <CardDescription>
           Fes clic al botó per invocar la funció `getDadesAppSheet` i veure el resultat de l'API.
         </CardDescription>

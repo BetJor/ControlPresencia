@@ -21,8 +21,8 @@ import {
   useMemoFirebase,
   deleteDocumentNonBlocking,
 } from '@/firebase';
-import type { VisitRegistration, UsuariDins } from '@/lib/types';
-import { collection, query, where, doc } from 'firebase/firestore';
+import type { VisitRegistration, UsuariDins, Directori } from '@/lib/types';
+import { collection, query, where, doc, getDoc } from 'firebase/firestore';
 import { Contact, Users, User, Loader2, LogOut } from 'lucide-react';
 import {
   Accordion,
@@ -44,6 +44,7 @@ export default function PresentPeopleList() {
   const [presentVisitors, setPresentVisitors] = useState<VisitRegistration[]>(
     []
   );
+  const [detailedStaff, setDetailedStaff] = useState<Directori[]>([]);
 
   // Col·leccions de Firestore
   const usuarisDinsCollection = useMemoFirebase(
@@ -73,6 +74,24 @@ export default function PresentPeopleList() {
     }
   }, [visitors]);
 
+  // Fetch full staff details when presentStaff changes
+  useEffect(() => {
+    if (presentStaff && firestore) {
+      const fetchStaffDetails = async () => {
+        const staffDetailsPromises = presentStaff.map(staffMember => {
+          const staffDocRef = doc(firestore, 'directori', staffMember.id);
+          return getDoc(staffDocRef);
+        });
+        const staffDocs = await Promise.all(staffDetailsPromises);
+        const detailedStaffData = staffDocs
+          .map(docSnap => (docSnap.exists() ? ({ id: docSnap.id, ...docSnap.data() } as Directori) : null))
+          .filter((p): p is Directori => p !== null);
+        setDetailedStaff(detailedStaffData);
+      };
+      fetchStaffDetails();
+    }
+  }, [presentStaff, firestore]);
+
   const handleVisitorCheckout = (visitorId: string) => {
     if (firestore && visitorId) {
       const visitorDocRef = doc(firestore, 'visit_registrations', visitorId);
@@ -89,7 +108,7 @@ export default function PresentPeopleList() {
 
 
   const isLoading = staffLoading || visitorsLoading;
-  const totalPresent = (presentStaff?.length || 0) + presentVisitors.length;
+  const totalPresent = (detailedStaff?.length || 0) + presentVisitors.length;
 
   const getFormattedTime = (timestamp: any) => {
     if (timestamp && typeof timestamp.toDate === 'function') {
@@ -187,32 +206,26 @@ export default function PresentPeopleList() {
                 <AccordionTrigger className="text-base font-medium">
                   <div className="flex items-center gap-2">
                     <User className="h-5 w-5" />
-                    <span>Empleats ({presentStaff?.length || 0})</span>
+                    <span>Empleats ({detailedStaff?.length || 0})</span>
                   </div>
                 </AccordionTrigger>
                 <AccordionContent>
-                  {presentStaff && presentStaff.length > 0 ? (
+                  {detailedStaff && detailedStaff.length > 0 ? (
                     <Table>
                       <TableHeader>
                         <TableRow>
                           <TableHead className="py-2 px-3">Cognoms</TableHead>
                           <TableHead className="py-2 px-3">Nom</TableHead>
-                          <TableHead className="hidden sm:table-cell py-2 px-3">
-                            Hora Darrera Entrada
-                          </TableHead>
                           <TableHead className="text-right py-2 px-3">Accions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {presentStaff.map((employee) => (
+                        {detailedStaff.map((employee) => (
                           <TableRow key={`emp-${employee.id}`} className="text-sm">
                             <TableCell className="font-medium py-2 px-3">
-                              {employee.cognoms}
+                              {employee.cognom}
                             </TableCell>
                             <TableCell className="py-2 px-3">{employee.nom}</TableCell>
-                            <TableCell className="hidden sm:table-cell py-2 px-3">
-                              {getFormattedTime(employee.horaDarreraEntrada)}
-                            </TableCell>
                              <TableCell className="text-right py-2 px-3">
                               <Tooltip>
                                 <TooltipTrigger asChild>

@@ -6,7 +6,7 @@ import {
   Clock,
   PanelLeft,
   Contact,
-  BookUser,
+  Sheet as SheetIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -52,6 +52,10 @@ export default function Header() {
             <Link href="/visitors" className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground">
               <Contact className="h-5 w-5" />
               Visitas
+            </Link>
+            <Link href="/appsheet" className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground">
+              <SheetIcon className="h-5 w-5" />
+              AppSheet
             </Link>
             <Link href="#" className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground">
               <Settings className="h-5 w-5" />

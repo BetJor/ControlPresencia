@@ -150,7 +150,7 @@ exports.importarUsuarisAGoogleWorkspace = functions
 
 exports.getDadesAppSheet = onCall({ region: "europe-west1", memory: "1GiB", timeoutSeconds: 60}, async (request) => {
   // Aquesta funció crida l'API d'AppSheet per obtenir dades.
-  const APP_ID = "78e78850-4bd3-48a6-b9dd-86610de1f4d3";
+  const APP_ID = "94c06d4b-4ed0-49d4-85a9-003710c7038b";
   const APP_ACCESS_KEY = "V2-LINid-jygnH-4Eqx6-xEe13-kXpTW-ZALoX-yY7yc-q9EMj"; // TODO: Guardar-la a secrets!
 
   const url = `https://api.appsheet.com/api/v2/apps/${APP_ID}/tables/dbo.Google_EntradasSalidas/Action`;
@@ -178,4 +178,85 @@ exports.getDadesAppSheet = onCall({ region: "europe-west1", memory: "1GiB", time
 
   const data = await response.json();
   return data; // Això retorna les dades al teu client Firebase
+});
+
+
+exports.sincronitzarPersonalPresent = functions
+    .region('europe-west1')
+    .pubsub.schedule('every 5 minutes')
+    .onRun(async (context) => {
+
+    console.log("Iniciant la sincronització de personal present.");
+
+    const APP_ID = "94c06d4b-4ed0-49d4-85a9-003710c7038b";
+    const APP_ACCESS_KEY = "V2-LINid-jygnH-4Eqx6-xEe13-kXpTW-ZALoX-yY7yc-q9EMj";
+    const db = getFirestore();
+
+    try {
+        // 1. Obtenir fitxatges de AppSheet
+        const url = `https://api.appsheet.com/api/v2/apps/${APP_ID}/tables/dbo.Google_EntradasSalidas/Action`;
+        const body = JSON.stringify({ "Action": "Find", "Properties": {}, "Rows": [] });
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'ApplicationAccessKey': APP_ACCESS_KEY
+            },
+            body: body
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`Error de l'API d'AppSheet: ${response.status} ${response.statusText}`, errorText);
+            throw new Error(`Error de l'API d'AppSheet: ${response.statusText}`);
+        }
+
+        const fitxatges: any[] = await response.json() as any[];
+
+        // 2. Calcular usuaris presents
+        const usuarisCounts: { [key: string]: number } = {};
+        const avui = new Date().toISOString().slice(0, 10);
+
+        for (const fitxatge of fitxatges) {
+            const email = fitxatge.USEREMAIL;
+            const dataFitxatge = fitxatge["Fecha y Hora"].slice(0, 10);
+
+            if (dataFitxatge === avui) {
+                usuarisCounts[email] = (usuarisCounts[email] || 0) + 1;
+            }
+        }
+
+        const usuarisDinsAppSheet = Object.keys(usuarisCounts)
+            .filter(email => usuarisCounts[email] % 2 !== 0);
+
+        // 3. Sincronitzar amb Firestore
+        const usuarisDinsFirestoreSnapshot = await db.collection('usuaris_dins').get();
+        const usuarisDinsFirestore = usuarisDinsFirestoreSnapshot.docs.map(doc => doc.id);
+
+        const usuarisPerAfegir = usuarisDinsAppSheet.filter(email => !usuarisDinsFirestore.includes(email));
+        const usuarisPerEliminar = usuarisDinsFirestore.filter(email => !usuarisDinsAppSheet.includes(email));
+
+        const batch = db.batch();
+
+        for (const email of usuarisPerAfegir) {
+            const docRef = db.collection('usuaris_dins').doc(email);
+            batch.set(docRef, {}); 
+        }
+
+        for (const email of usuarisPerEliminar) {
+            const docRef = db.collection('usuaris_dins').doc(email);
+            batch.delete(docRef);
+        }
+
+        await batch.commit();
+
+        console.log(`Sincronització finalitzada. Afegits: ${usuarisPerAfegir.length}, Eliminats: ${usuarisPerEliminar.length}`);
+
+        return null;
+
+    } catch (error) {
+        console.error("Error durant la sincronització de personal present:", error);
+        return null;
+    }
 });
