@@ -2,9 +2,21 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
-import { collection } from "firebase/firestore";
-import { Loader2, Star } from "lucide-react";
+import { useCollection, useFirestore, useMemoFirebase, deleteDocumentNonBlocking } from "@/firebase";
+import { collection, doc } from "firebase/firestore";
+import { Loader2, Star, Trash2, Pencil } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 type FavoriteVisitor = {
     id: string;
@@ -20,6 +32,14 @@ export default function VisitorsPage() {
     }, [firestore]);
 
     const { data: favoriteVisitors, isLoading } = useCollection<FavoriteVisitor>(favoriteVisitorsCollection);
+    
+    const handleDelete = (visitorId: string) => {
+        if (firestore) {
+            const visitorDocRef = doc(firestore, 'favorite_visitors', visitorId);
+            deleteDocumentNonBlocking(visitorDocRef);
+        }
+    };
+
 
     return (
         <Card>
@@ -42,6 +62,7 @@ export default function VisitorsPage() {
                             <TableRow>
                                 <TableHead>Nombre</TableHead>
                                 <TableHead>Empresa</TableHead>
+                                <TableHead className="text-right">Acciones</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -49,6 +70,36 @@ export default function VisitorsPage() {
                                 <TableRow key={visitor.id}>
                                     <TableCell className="font-medium">{visitor.name}</TableCell>
                                     <TableCell>{visitor.company}</TableCell>
+                                    <TableCell className="text-right">
+                                        <div className="flex justify-end gap-2">
+                                            <Button variant="ghost" size="icon" disabled>
+                                                <Pencil className="h-4 w-4" />
+                                                <span className="sr-only">Editar</span>
+                                            </Button>
+                                            <AlertDialog>
+                                                <AlertDialogTrigger asChild>
+                                                    <Button variant="ghost" size="icon">
+                                                        <Trash2 className="h-4 w-4 text-destructive" />
+                                                        <span className="sr-only">Eliminar</span>
+                                                    </Button>
+                                                </AlertDialogTrigger>
+                                                <AlertDialogContent>
+                                                    <AlertDialogHeader>
+                                                    <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        Esta acción no se puede deshacer. Se eliminará permanentemente la visita favorita.
+                                                    </AlertDialogDescription>
+                                                    </AlertDialogHeader>
+                                                    <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                    <AlertDialogAction onClick={() => handleDelete(visitor.id)} className="bg-destructive hover:bg-destructive/90">
+                                                        Eliminar
+                                                    </AlertDialogAction>
+                                                    </AlertDialogFooter>
+                                                </AlertDialogContent>
+                                            </AlertDialog>
+                                        </div>
+                                    </TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>
