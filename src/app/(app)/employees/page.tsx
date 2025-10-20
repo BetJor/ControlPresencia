@@ -4,8 +4,8 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
-import { collection, query, where, orderBy, limit, startAfter, QueryDocumentSnapshot, DocumentData } from "firebase/firestore";
-import { Loader2, BookUser, Mail, Phone, Search, ChevronsUpDown, Check, XIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { collection, query, where, orderBy, limit, startAfter, QueryDocumentSnapshot, DocumentData, OrderByDirection } from "firebase/firestore";
+import { Loader2, BookUser, Mail, Phone, Search, ChevronsUpDown, Check, XIcon, ChevronLeft, ChevronRight, ArrowUp, ArrowDown } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,8 @@ import { cn } from "@/lib/utils";
 import type { Directori } from "@/lib/types";
 
 const PAGE_SIZE = 15;
+type SortKey = 'nom' | 'cognom' | 'centreCost';
+
 
 export default function DirectoryPage() {
     const firestore = useFirestore();
@@ -25,6 +27,8 @@ export default function DirectoryPage() {
     
     const [paginationCursors, setPaginationCursors] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]);
     const [currentPage, setCurrentPage] = useState(0);
+
+    const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: OrderByDirection }>({ key: 'nom', direction: 'asc' });
 
     const allDepartmentsCollection = useMemoFirebase(() => {
         if (!firestore) return null;
@@ -38,7 +42,17 @@ export default function DirectoryPage() {
         return [...new Set(allDepartments)].sort();
     }, [allEmployeesForDepts]);
     
-    // --- Base Query Logic ---
+    const handleSort = (key: SortKey) => {
+        setSortConfig(prevConfig => {
+            if (prevConfig.key === key) {
+                return { key, direction: prevConfig.direction === 'asc' ? 'desc' : 'asc' };
+            }
+            return { key, direction: 'asc' };
+        });
+        setCurrentPage(0);
+        setPaginationCursors([null]);
+    };
+
     const baseQuery = useMemoFirebase(() => {
         if (!firestore) return null;
         let q = collection(firestore, 'directori');
@@ -56,55 +70,60 @@ export default function DirectoryPage() {
     }, [firestore, departmentFilter]);
 
 
-    // --- Name Filter Queries ---
-    const nameSearchTerm = nameFilter.trim();
+    const nameSearchTerm = nameFilter.trim().toLowerCase();
     const nameFilterQuery = useMemoFirebase(() => {
         if (!firestore || !baseQuery || !nameSearchTerm) return null;
+         const searchTermCapitalized = nameSearchTerm.charAt(0).toUpperCase() + nameSearchTerm.slice(1);
         return query(
             baseQuery, 
             orderBy('nom'), 
-            where('nom', '>=', nameSearchTerm), 
-            where('nom', '<=', nameSearchTerm + '\uf8ff')
+            where('nom', '>=', searchTermCapitalized), 
+            where('nom', '<=', searchTermCapitalized + '\uf8ff')
         );
     }, [firestore, baseQuery, nameSearchTerm]);
 
     const lastNameFilterQuery = useMemoFirebase(() => {
         if (!firestore || !baseQuery || !nameSearchTerm) return null;
+        const searchTermCapitalized = nameSearchTerm.charAt(0).toUpperCase() + nameSearchTerm.slice(1);
         return query(
             baseQuery,
             orderBy('cognom'),
-            where('cognom', '>=', nameSearchTerm),
-            where('cognom', '<=', nameSearchTerm + '\uf8ff')
+            where('cognom', '>=', searchTermCapitalized),
+            where('cognom', '<=', searchTermCapitalized + '\uf8ff')
         );
     }, [firestore, baseQuery, nameSearchTerm]);
     
-    // --- Pagination Query (when no name filter) ---
     const paginatedQuery = useMemoFirebase(() => {
-        if (!firestore || !baseQuery || nameSearchTerm) return null; // Only run when there's no name filter
+        if (!firestore || !baseQuery || nameSearchTerm) return null; 
         return query(
             baseQuery,
-            orderBy('nom'), 
+            orderBy(sortConfig.key, sortConfig.direction),
             startAfter(paginationCursors[currentPage] || 0),
             limit(PAGE_SIZE + 1)
         );
-    }, [firestore, baseQuery, nameSearchTerm, currentPage, paginationCursors]);
+    }, [firestore, baseQuery, nameSearchTerm, currentPage, paginationCursors, sortConfig]);
 
 
-    // --- Data Fetching ---
     const { data: paginatedEmployeesData, isLoading: isLoadingPaginated, error: paginatedError, snapshot: paginatedSnapshot } = useCollection<Directori>(paginatedQuery);
     const { data: nameFilteredEmployees, isLoading: isLoadingName } = useCollection<Directori>(nameFilterQuery);
     const { data: lastNameFilteredEmployees, isLoading: isLoadingLastName } = useCollection<Directori>(lastNameFilterQuery);
 
-    // --- Data Merging & Memoization ---
     const employees = useMemo(() => {
         if (nameSearchTerm) {
             const resultsMap = new Map<string, Directori>();
             nameFilteredEmployees?.forEach(doc => doc.id && resultsMap.set(doc.id, doc));
             lastNameFilteredEmployees?.forEach(doc => doc.id && resultsMap.set(doc.id, doc));
-            return Array.from(resultsMap.values()).sort((a, b) => a.nom.localeCompare(b.nom));
+            const combined = Array.from(resultsMap.values());
+            
+            return combined.sort((a,b) => {
+                const aVal = a[sortConfig.key] || '';
+                const bVal = b[sortConfig.key] || '';
+                const comparison = String(aVal).localeCompare(String(bVal));
+                return sortConfig.direction === 'asc' ? comparison : -comparison;
+            });
         }
         return paginatedEmployeesData?.slice(0, PAGE_SIZE) ?? [];
-    }, [nameSearchTerm, paginatedEmployeesData, nameFilteredEmployees, lastNameFilteredEmployees]);
+    }, [nameSearchTerm, paginatedEmployeesData, nameFilteredEmployees, lastNameFilteredEmployees, sortConfig]);
 
     const hasNextPage = !nameSearchTerm && (paginatedEmployeesData?.length ?? 0) > PAGE_SIZE;
     const hasPrevPage = !nameSearchTerm && currentPage > 0;
@@ -130,11 +149,18 @@ export default function DirectoryPage() {
     useEffect(() => {
         setCurrentPage(0);
         setPaginationCursors([null]);
-    }, [nameFilter, departmentFilter]);
+    }, [nameFilter, departmentFilter, sortConfig]);
 
 
     const currentDepartment = departments.find(dep => dep === departmentFilter)
     const effectiveIsLoading = isLoadingPaginated || isLoadingDepts || isLoadingName || isLoadingLastName;
+
+    const renderSortArrow = (key: SortKey) => {
+        if (sortConfig.key === key) {
+            return sortConfig.direction === 'asc' ? <ArrowUp className="ml-2 h-4 w-4" /> : <ArrowDown className="ml-2 h-4 w-4" />;
+        }
+        return null;
+    };
 
     return (
         <Card>
@@ -245,8 +271,16 @@ export default function DirectoryPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead className="w-[300px]">Nombre</TableHead>
-                                    <TableHead>Id</TableHead>
+                                    <TableHead className="w-[300px]">
+                                        <Button variant="ghost" onClick={() => handleSort('nom')} className="px-0 h-auto hover:bg-transparent">
+                                            Nombre {renderSortArrow('nom')}
+                                        </Button>
+                                    </TableHead>
+                                    <TableHead>
+                                        <Button variant="ghost" onClick={() => handleSort('centreCost')} className="px-0 h-auto hover:bg-transparent">
+                                            Id {renderSortArrow('centreCost')}
+                                        </Button>
+                                    </TableHead>
                                     <TableHead className="hidden md:table-cell">Departamento</TableHead>
                                     <TableHead className="text-right">Contacto</TableHead>
                                 </TableRow>
