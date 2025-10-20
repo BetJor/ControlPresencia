@@ -213,34 +213,59 @@ exports.sincronitzarPersonalPresent = functions
             throw new Error(`Error de l'API d'AppSheet: ${response.statusText}`);
         }
         const fitxatges = await response.json();
-        // 2. Calcular usuaris presents
-        const usuarisCounts = {};
-        const avui = new Date().toISOString().slice(0, 10);
+        // 2. Processar i calcular usuaris presents
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const userPunches = {};
         for (const fitxatge of fitxatges) {
-            const email = fitxatge.USEREMAIL;
-            const dataFitxatge = fitxatge["Fecha y Hora"].slice(0, 10);
-            if (dataFitxatge === avui) {
-                usuarisCounts[email] = (usuarisCounts[email] || 0) + 1;
+            const dateStr = fitxatge['Fecha y Hora'] || fitxatge['Data'];
+            if (!dateStr || typeof dateStr !== 'string') {
+                continue; // Skip if date is missing or not a string
+            }
+            // AppSheet dates are 'MM/DD/YYYY HH:mm:ss'
+            const parts = dateStr.split(/[\s/:]+/); // MM, DD, YYYY, HH, mm, ss
+            const date = new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]), parseInt(parts[3]), parseInt(parts[4]), parseInt(parts[5]));
+            if (date >= today) {
+                const employeeId = fitxatge.USEREMAIL || fitxatge.P_CI;
+                if (!employeeId || typeof employeeId !== 'string') {
+                    continue;
+                }
+                if (!userPunches[employeeId]) {
+                    userPunches[employeeId] = [];
+                }
+                userPunches[employeeId].push(Object.assign(Object.assign({}, fitxatge), { parsedDate: date }));
             }
         }
-        const usuarisDinsAppSheet = Object.keys(usuarisCounts)
-            .filter(email => usuarisCounts[email] % 2 !== 0);
+        const presentUsers = {};
+        for (const employeeId in userPunches) {
+            const punches = userPunches[employeeId];
+            if (punches.length % 2 !== 0) { // Odd number of punches means they are in
+                punches.sort((a, b) => b.parsedDate - a.parsedDate);
+                const lastPunch = punches[0];
+                presentUsers[employeeId] = {
+                    horaDarreraEntrada: firestore_1.Timestamp.fromDate(lastPunch.parsedDate),
+                };
+            }
+        }
+        const presentUserIds = Object.keys(presentUsers);
         // 3. Sincronitzar amb Firestore
         const usuarisDinsFirestoreSnapshot = await db.collection('usuaris_dins').get();
-        const usuarisDinsFirestore = usuarisDinsFirestoreSnapshot.docs.map(doc => doc.id);
-        const usuarisPerAfegir = usuarisDinsAppSheet.filter(email => !usuarisDinsFirestore.includes(email));
-        const usuarisPerEliminar = usuarisDinsFirestore.filter(email => !usuarisDinsAppSheet.includes(email));
+        const usuarisDinsFirestoreIds = usuarisDinsFirestoreSnapshot.docs.map(doc => doc.id);
+        const usuarisPerAfegirOActualitzar = presentUserIds;
+        const usuarisPerEliminar = usuarisDinsFirestoreIds.filter(id => !presentUserIds.includes(id));
         const batch = db.batch();
-        for (const email of usuarisPerAfegir) {
-            const docRef = db.collection('usuaris_dins').doc(email);
-            batch.set(docRef, {});
+        // Add or update users who are present
+        for (const userId of usuarisPerAfegirOActualitzar) {
+            const docRef = db.collection('usuaris_dins').doc(userId);
+            batch.set(docRef, presentUsers[userId], { merge: true });
         }
-        for (const email of usuarisPerEliminar) {
-            const docRef = db.collection('usuaris_dins').doc(email);
+        // Remove users who are no longer present
+        for (const userId of usuarisPerEliminar) {
+            const docRef = db.collection('usuaris_dins').doc(userId);
             batch.delete(docRef);
         }
         await batch.commit();
-        console.log(`Sincronització finalitzada. Afegits: ${usuarisPerAfegir.length}, Eliminats: ${usuarisPerEliminar.length}`);
+        console.log(`Sincronització finalitzada. Presents: ${usuarisPerAfegirOActualitzar.length}, Eliminats: ${usuarisPerEliminar.length}`);
         return null;
     }
     catch (error) {

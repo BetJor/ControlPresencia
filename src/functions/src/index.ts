@@ -67,6 +67,12 @@ exports.importarUsuarisAGoogleWorkspace = functions
         ) {
           edifici = user.locations[0].buildingId.replace(/-/g, ' ');
         }
+        
+        let customId = null;
+        if (user.customSchemas && user.customSchemas.IOCA && user.customSchemas.IOCA.P_CI) {
+            customId = user.customSchemas.IOCA.P_CI;
+        }
+
 
         let empresa = null,
           departament = null,
@@ -115,6 +121,7 @@ exports.importarUsuarisAGoogleWorkspace = functions
 
         // Creem l'objecte final per a Firestore
         const userData = {
+          id: customId || '',
           nom: user.name.givenName || '',
           cognom: user.name.familyName || '',
           email: user.primaryEmail,
@@ -183,6 +190,7 @@ exports.getDadesAppSheet = onCall({ region: "europe-west1", memory: "1GiB", time
 
 exports.sincronitzarPersonalPresent = functions
   .region('europe-west1')
+  .runWith({ memory: '1GB' })
   .pubsub.schedule('every 5 minutes')
   .onRun(async (context) => {
     console.log("Iniciant la sincronització de personal present.");
@@ -198,10 +206,7 @@ exports.sincronitzarPersonalPresent = functions
 
       const response = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'ApplicationAccessKey': APP_ACCESS_KEY
-        },
+        headers: { 'Content-Type': 'application/json', 'ApplicationAccessKey': APP_ACCESS_KEY },
         body: body
       });
 
@@ -220,62 +225,77 @@ exports.sincronitzarPersonalPresent = functions
       const userPunches: { [key: string]: any[] } = {};
 
       for (const fitxatge of fitxatges) {
-        // AppSheet dates are 'MM/DD/YYYY HH:mm:ss'
-        const parts = fitxatge["Data"].split(/[\s/:]+/); // MM, DD, YYYY, HH, mm, ss
-        const date = new Date(parts[2], parts[0] - 1, parts[1], parts[3], parts[4], parts[5]);
+        const dateStr = fitxatge['Fecha y Hora'] || fitxatge['Data'];
+        const employeeEmail = fitxatge.USEREMAIL;
+
+        if (!dateStr || typeof dateStr !== 'string' || !employeeEmail) {
+          continue;
+        }
+
+        const parts = dateStr.split(/[\s/:]+/);
+        const date = new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]), parseInt(parts[3]), parseInt(parts[4]), parseInt(parts[5]));
 
         if (date >= today) {
-          const employeeId = fitxatge.P_CI;
-          if (!userPunches[employeeId]) {
-            userPunches[employeeId] = [];
+          if (!userPunches[employeeEmail]) {
+            userPunches[employeeEmail] = [];
           }
-          userPunches[employeeId].push({ ...fitxatge, parsedDate: date });
+          userPunches[employeeEmail].push({ ...fitxatge, parsedDate: date });
         }
       }
-
-      const presentUsers: { [key: string]: any } = {};
-
-      for (const employeeId in userPunches) {
-        const punches = userPunches[employeeId];
-        if (punches.length % 2 !== 0) { // Odd number of punches means they are in
-          // Find the last punch to get the latest info
-          punches.sort((a, b) => b.parsedDate - a.parsedDate);
-          const lastPunch = punches[0];
-          presentUsers[employeeId] = {
-            nom: lastPunch.Nom,
-            cognoms: lastPunch.Cognoms,
-            horaDarreraEntrada: Timestamp.fromDate(lastPunch.parsedDate),
-          };
+      
+      const presentUserEmails = new Set<string>();
+      for (const email in userPunches) {
+        if (userPunches[email].length % 2 !== 0) {
+          presentUserEmails.add(email);
         }
       }
-
-      const presentUserIds = Object.keys(presentUsers);
 
       // 3. Sincronitzar amb Firestore
-      const usuarisDinsFirestoreSnapshot = await db.collection('usuaris_dins').get();
-      const usuarisDinsFirestoreIds = usuarisDinsFirestoreSnapshot.docs.map(doc => doc.id);
+      const usuarisDinsCollection = db.collection('usuaris_dins');
+      const directoriCollection = db.collection('directori');
+      
+      const usuarisDinsSnapshot = await usuarisDinsCollection.get();
+      const usuarisDinsActuals = new Set(usuarisDinsSnapshot.docs.map(doc => doc.id));
 
-      const usuarisPerAfegirOActualitzar = presentUserIds;
-      const usuarisPerEliminar = usuarisDinsFirestoreIds.filter(id => !presentUserIds.includes(id));
+      const usuarisPerEliminar = [...usuarisDinsActuals].filter(email => !presentUserEmails.has(email));
+      const usuarisPerAfegirOActualitzar = [...presentUserEmails];
 
       const batch = db.batch();
 
-      // Add or update users who are present
-      for (const userId of usuarisPerAfegirOActualitzar) {
-        const docRef = db.collection('usuaris_dins').doc(userId);
-        batch.set(docRef, presentUsers[userId], { merge: true });
+      // Eliminar usuaris que ja no estan presents
+      for (const email of usuarisPerEliminar) {
+        batch.delete(usuarisDinsCollection.doc(email));
       }
 
-      // Remove users who are no longer present
-      for (const userId of usuarisPerEliminar) {
-        const docRef = db.collection('usuaris_dins').doc(userId);
-        batch.delete(docRef);
+      // Afegir o actualitzar usuaris presents
+      if (usuarisPerAfegirOActualitzar.length > 0) {
+          const directoriSnapshot = await directoriCollection.where('email', 'in', usuarisPerAfegirOActualitzar).get();
+          
+          const directoriMap = new Map();
+          directoriSnapshot.forEach(doc => {
+              directoriMap.set(doc.id, doc.data());
+          });
+
+          for (const email of usuarisPerAfegirOActualitzar) {
+              const employeeDetails = directoriMap.get(email);
+              if (employeeDetails) {
+                  const userSpecificPunches = userPunches[email].sort((a, b) => b.parsedDate - a.parsedDate);
+                  const lastPunch = userSpecificPunches[0];
+
+                  const dataToSet = {
+                      nom: employeeDetails.nom,
+                      cognom: employeeDetails.cognom,
+                      horaDarreraEntrada: Timestamp.fromDate(lastPunch.parsedDate),
+                  };
+                  
+                  batch.set(usuarisDinsCollection.doc(email), dataToSet, { merge: true });
+              }
+          }
       }
 
       await batch.commit();
 
       console.log(`Sincronització finalitzada. Presents: ${usuarisPerAfegirOActualitzar.length}, Eliminats: ${usuarisPerEliminar.length}`);
-
       return null;
 
     } catch (error) {
