@@ -2,6 +2,7 @@ import * as functions from 'firebase-functions';
 import { google } from 'googleapis';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { onCall } from "firebase-functions/v2/https";
 
 initializeApp();
 
@@ -144,3 +145,35 @@ exports.importarUsuarisAGoogleWorkspace = functions
       return null;
     }
   });
+
+
+exports.getDadesAppSheet = onCall({ region: "europe-west1", memory: "1GiB", timeoutSeconds: 60}, async (request) => {
+  const APP_ID = "78e78850-4bd3-48a6-b9dd-86610de1f4d3";
+  const APP_ACCESS_KEY = "V2-LINid-jygnH-4Eqx6-xEe13-kXpTW-ZALoX-yY7yc-q9EMj"; // TODO: Guardar-la a secrets!
+
+  const url = `https://api.appsheet.com/api/v2/apps/${APP_ID}/tables/dbo.Google_EntradasSalidas/Action`;
+
+  const body = JSON.stringify({
+    "Action": "Find", // Acció per buscar/llegir files
+    "Properties": {},
+    "Rows": []
+  });
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'ApplicationAccessKey': APP_ACCESS_KEY
+    },
+    body: body
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`Error de l'API d'AppSheet: ${response.status} ${response.statusText}`, errorText);
+    throw new functions.https.HttpsError('internal', `Error de l'API d'AppSheet: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data; // Això retorna les dades al teu client Firebase
+});
