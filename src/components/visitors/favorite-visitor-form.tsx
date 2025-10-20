@@ -15,8 +15,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Pencil } from 'lucide-react';
-import { useFirestore, updateDocumentNonBlocking } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { useFirestore, updateDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
+import { doc, collection } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 
 type FavoriteVisitor = {
@@ -25,13 +25,15 @@ type FavoriteVisitor = {
     company: string;
 };
 
-interface EditFavoriteVisitorFormProps {
-  visitor: FavoriteVisitor;
+interface FavoriteVisitorFormProps {
+  visitor?: FavoriteVisitor;
+  children?: React.ReactNode;
 }
 
-export function EditFavoriteVisitorForm({ visitor }: EditFavoriteVisitorFormProps) {
-  const [name, setName] = useState(visitor.name);
-  const [company, setCompany] = useState(visitor.company);
+export function FavoriteVisitorForm({ visitor, children }: FavoriteVisitorFormProps) {
+  const isEditMode = !!visitor;
+  const [name, setName] = useState(visitor?.name || '');
+  const [company, setCompany] = useState(visitor?.company || '');
   const [isOpen, setIsOpen] = useState(false);
   const firestore = useFirestore();
   const { toast } = useToast();
@@ -45,31 +47,53 @@ export function EditFavoriteVisitorForm({ visitor }: EditFavoriteVisitorFormProp
         });
         return;
     }
+    
+    if (isEditMode) {
+        const visitorDocRef = doc(firestore, 'favorite_visitors', visitor.id);
+        updateDocumentNonBlocking(visitorDocRef, { name, company });
+        toast({
+            title: "Guardado",
+            description: "Los datos del visitante favorito se han actualizado.",
+        });
+    } else {
+        const favsCollection = collection(firestore, 'favorite_visitors');
+        addDocumentNonBlocking(favsCollection, { name, company });
+        toast({
+            title: "Creado",
+            description: "El nuevo visitante favorito ha sido añadido.",
+        });
+    }
 
-    const visitorDocRef = doc(firestore, 'favorite_visitors', visitor.id);
-    updateDocumentNonBlocking(visitorDocRef, { name, company });
-
-    toast({
-        title: "Guardado",
-        description: "Los datos del visitante favorito se han actualizado.",
-    });
 
     setIsOpen(false);
   };
+  
+  const handleOpenChange = (open: boolean) => {
+    if (open && !isEditMode) {
+        setName('');
+        setCompany('');
+    }
+    setIsOpen(open);
+  }
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon">
-          <Pencil className="h-4 w-4" />
-          <span className="sr-only">Editar</span>
-        </Button>
+        {children ? children : (
+            <Button variant="ghost" size="icon">
+                <Pencil className="h-4 w-4" />
+                <span className="sr-only">Editar</span>
+            </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Editar Visita Favorita</DialogTitle>
+          <DialogTitle>{isEditMode ? 'Editar Visita Favorita' : 'Añadir Visita Favorita'}</DialogTitle>
           <DialogDescription>
-            Realiza cambios en los datos del visitante. Haz clic en guardar cuando hayas terminado.
+            {isEditMode 
+                ? 'Realiza cambios en los datos del visitante. Haz clic en guardar cuando hayas terminado.'
+                : 'Añade un nuevo visitante a tu lista de favoritos.'
+            }
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
@@ -82,6 +106,7 @@ export function EditFavoriteVisitorForm({ visitor }: EditFavoriteVisitorFormProp
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="col-span-3"
+              placeholder="Ej: Juan Pérez"
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
@@ -93,6 +118,7 @@ export function EditFavoriteVisitorForm({ visitor }: EditFavoriteVisitorFormProp
               value={company}
               onChange={(e) => setCompany(e.target.value)}
               className="col-span-3"
+              placeholder="Ej: Acme Corp"
             />
           </div>
         </div>
@@ -102,7 +128,7 @@ export function EditFavoriteVisitorForm({ visitor }: EditFavoriteVisitorFormProp
                     Cancelar
                 </Button>
             </DialogClose>
-            <Button type="button" onClick={handleSave}>Guardar Cambios</Button>
+            <Button type="button" onClick={handleSave}>Guardar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
