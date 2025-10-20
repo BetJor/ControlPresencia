@@ -23,12 +23,8 @@ export interface UseCollectionResult<T> {
   data: WithId<T>[] | null; // Document data with ID, or null.
   isLoading: boolean;       // True if loading.
   error: FirestoreError | Error | null; // Error object, or null.
+  snapshot: QuerySnapshot<DocumentData> | null; // The raw snapshot
 }
-
-interface UseCollectionOptions {
-  onNewData?: (snapshot: QuerySnapshot<DocumentData>) => void;
-}
-
 
 /* Internal implementation of Query:
   https://github.com/firebase/firebase-js-sdk/blob/c5f08a9bc5da0d2b0207802c972d53724ccef055/packages/firestore/src/lite-api/reference.ts#L143
@@ -57,25 +53,20 @@ export interface InternalQuery extends Query<DocumentData> {
  * @returns {UseCollectionResult<T>} Object with data, isLoading, error.
  */
 export function useCollection<T = any>(
-    memoizedTargetRefOrQuery: ((CollectionReference<DocumentData> | Query<DocumentData>) & {__memo?: boolean})  | null | undefined,
-    options?: UseCollectionOptions
+    memoizedTargetRefOrQuery: ((CollectionReference<DocumentData> | Query<DocumentData>) & {__memo?: boolean})  | null | undefined
 ): UseCollectionResult<T> {
   type ResultItemType = WithId<T>;
   type StateDataType = ResultItemType[] | null;
 
   const [data, setData] = useState<StateDataType>(null);
+  const [snapshot, setSnapshot] = useState<QuerySnapshot<DocumentData> | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<FirestoreError | Error | null>(null);
-
-  // Use a ref to store the options callback to avoid it being a dependency of useEffect
-  const optionsRef = useRef(options);
-  useEffect(() => {
-    optionsRef.current = options;
-  }, [options]);
 
   useEffect(() => {
     if (!memoizedTargetRefOrQuery) {
       setData(null);
+      setSnapshot(null);
       setIsLoading(false);
       setError(null);
       return;
@@ -93,10 +84,9 @@ export function useCollection<T = any>(
           results.push({ ...(doc.data() as T), id: doc.id });
         }
         setData(results);
+        setSnapshot(snapshot);
         setError(null);
         setIsLoading(false);
-        // Call the latest callback from the ref
-        optionsRef.current?.onNewData?.(snapshot);
       },
       (error: FirestoreError) => {
         // This logic extracts the path from either a ref or a query
@@ -112,6 +102,7 @@ export function useCollection<T = any>(
 
         setError(contextualError)
         setData(null)
+        setSnapshot(null);
         setIsLoading(false)
 
         // trigger global error propagation
@@ -125,5 +116,5 @@ export function useCollection<T = any>(
   if(memoizedTargetRefOrQuery && !memoizedTargetRefOrQuery.__memo) {
     throw new Error(memoizedTargetRefOrQuery + ' was not properly memoized using useMemoFirebase');
   }
-  return { data, isLoading, error };
+  return { data, isLoading, error, snapshot };
 }

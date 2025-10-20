@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
-import { collection, query, where, orderBy, limit, startAfter, QueryDocumentSnapshot, DocumentData, or } from "firebase/firestore";
+import { collection, query, where, orderBy, limit, startAfter, QueryDocumentSnapshot, DocumentData } from "firebase/firestore";
 import { Loader2, BookUser, Mail, Phone, Search, ChevronsUpDown, Check, XIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -41,7 +41,7 @@ export default function DirectoryPage() {
     // --- Base Query Logic ---
     const baseQuery = useMemoFirebase(() => {
         if (!firestore) return null;
-        let q = query(collection(firestore, 'directori'));
+        let q = collection(firestore, 'directori');
         
         const filters = [];
         if (departmentFilter) {
@@ -49,88 +49,74 @@ export default function DirectoryPage() {
         }
 
         if (filters.length > 0) {
-            q = query(q, ...filters);
+            return query(q, ...filters);
         }
 
         return q;
     }, [firestore, departmentFilter]);
 
 
-    // --- Pagination Query (when no name filter) ---
-    const paginatedQuery = useMemoFirebase(() => {
-        if (!firestore || !baseQuery || nameFilter) return null; // Only run when there's no name filter
-        return query(
-            baseQuery,
-            orderBy('nom'), 
-            startAfter(paginationCursors[currentPage]),
-            limit(PAGE_SIZE + 1)
-        );
-    }, [firestore, baseQuery, nameFilter, currentPage, paginationCursors]);
-
     // --- Name Filter Queries ---
+    const nameSearchTerm = nameFilter.trim();
     const nameFilterQuery = useMemoFirebase(() => {
-        if (!firestore || !baseQuery || !nameFilter) return null;
+        if (!firestore || !baseQuery || !nameSearchTerm) return null;
         return query(
             baseQuery, 
             orderBy('nom'), 
-            where('nom', '>=', nameFilter), 
-            where('nom', '<=', nameFilter + '\uf8ff')
+            where('nom', '>=', nameSearchTerm), 
+            where('nom', '<=', nameSearchTerm + '\uf8ff')
         );
-    }, [firestore, baseQuery, nameFilter]);
+    }, [firestore, baseQuery, nameSearchTerm]);
 
     const lastNameFilterQuery = useMemoFirebase(() => {
-        if (!firestore || !baseQuery || !nameFilter) return null;
+        if (!firestore || !baseQuery || !nameSearchTerm) return null;
         return query(
             baseQuery,
             orderBy('cognom'),
-            where('cognom', '>=', nameFilter),
-            where('cognom', '<=', nameFilter + '\uf8ff')
+            where('cognom', '>=', nameSearchTerm),
+            where('cognom', '<=', nameSearchTerm + '\uf8ff')
         );
-    }, [firestore, baseQuery, nameFilter]);
-
-    const onNewData = useCallback((snapshot: QueryDocumentSnapshot<DocumentData>) => {
-        if (nameFilter) return; // Do not manage pagination state when filtering
-        const hasMore = snapshot.docs.length > PAGE_SIZE;
-
-        if (hasMore) {
-            const nextCursor = snapshot.docs[snapshot.docs.length - 2];
-            setPaginationCursors(prev => {
-                const newCursors = [...prev];
-                if (currentPage + 1 < newCursors.length) {
-                     // If we are revisiting a page, we don't need to update the cursor
-                    if (newCursors[currentPage + 1]?.id !== nextCursor.id) {
-                       newCursors[currentPage + 1] = nextCursor;
-                    }
-                } else {
-                    newCursors.push(nextCursor);
-                }
-                return newCursors;
-            });
-        }
-    }, [nameFilter, currentPage, PAGE_SIZE]);
+    }, [firestore, baseQuery, nameSearchTerm]);
+    
+    // --- Pagination Query (when no name filter) ---
+    const paginatedQuery = useMemoFirebase(() => {
+        if (!firestore || !baseQuery || nameSearchTerm) return null; // Only run when there's no name filter
+        return query(
+            baseQuery,
+            orderBy('nom'), 
+            startAfter(paginationCursors[currentPage] || 0),
+            limit(PAGE_SIZE + 1)
+        );
+    }, [firestore, baseQuery, nameSearchTerm, currentPage, paginationCursors]);
 
 
     // --- Data Fetching ---
-    const { data: paginatedEmployeesData, isLoading: isLoadingPaginated } = useCollection<Directori>(paginatedQuery, { onNewData });
+    const { data: paginatedEmployeesData, isLoading: isLoadingPaginated, error: paginatedError, snapshot: paginatedSnapshot } = useCollection<Directori>(paginatedQuery);
     const { data: nameFilteredEmployees, isLoading: isLoadingName } = useCollection<Directori>(nameFilterQuery);
     const { data: lastNameFilteredEmployees, isLoading: isLoadingLastName } = useCollection<Directori>(lastNameFilterQuery);
 
     // --- Data Merging & Memoization ---
     const employees = useMemo(() => {
-        if (nameFilter) {
+        if (nameSearchTerm) {
             const resultsMap = new Map<string, Directori>();
-            nameFilteredEmployees?.forEach(doc => resultsMap.set(doc.id, doc));
-            lastNameFilteredEmployees?.forEach(doc => resultsMap.set(doc.id, doc));
+            nameFilteredEmployees?.forEach(doc => doc.id && resultsMap.set(doc.id, doc));
+            lastNameFilteredEmployees?.forEach(doc => doc.id && resultsMap.set(doc.id, doc));
             return Array.from(resultsMap.values()).sort((a, b) => a.nom.localeCompare(b.nom));
         }
         return paginatedEmployeesData?.slice(0, PAGE_SIZE) ?? [];
-    }, [nameFilter, paginatedEmployeesData, nameFilteredEmployees, lastNameFilteredEmployees]);
+    }, [nameSearchTerm, paginatedEmployeesData, nameFilteredEmployees, lastNameFilteredEmployees]);
 
-    const hasNextPage = !nameFilter && (paginatedEmployeesData?.length ?? 0) > PAGE_SIZE;
-    const hasPrevPage = !nameFilter && currentPage > 0;
+    const hasNextPage = !nameSearchTerm && (paginatedEmployeesData?.length ?? 0) > PAGE_SIZE;
+    const hasPrevPage = !nameSearchTerm && currentPage > 0;
     
     const handleNextPage = () => {
-        if (hasNextPage) {
+        if (hasNextPage && paginatedSnapshot) {
+            const lastVisibleDoc = paginatedSnapshot.docs[paginatedSnapshot.docs.length - 2];
+            setPaginationCursors(prev => {
+                const newCursors = [...prev];
+                newCursors[currentPage + 1] = lastVisibleDoc;
+                return newCursors;
+            });
             setCurrentPage(prev => prev + 1);
         }
     };
@@ -221,7 +207,7 @@ export default function DirectoryPage() {
                                                     key={dep}
                                                     value={dep}
                                                     onSelect={(currentValue) => {
-                                                        const newFilter = dep.toLowerCase() === departmentFilter.toLowerCase() ? "" : dep;
+                                                        const newFilter = dep === departmentFilter ? "" : dep;
                                                         setDepartmentFilter(newFilter);
                                                         setDepartmentOpen(false);
                                                     }}
@@ -310,7 +296,7 @@ export default function DirectoryPage() {
                             </TableBody>
                         </Table>
                     </div>
-                    {!nameFilter && (
+                    {!nameSearchTerm && (
                          <div className="flex justify-end items-center gap-2 pt-4">
                             <Button
                                 variant="outline"
@@ -342,5 +328,3 @@ export default function DirectoryPage() {
         </Card>
     )
 }
-
-    
