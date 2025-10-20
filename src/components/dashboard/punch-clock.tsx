@@ -20,8 +20,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { Card, CardTitle } from "@/components/ui/card";
-import { useFirestore, useUser, addDocumentNonBlocking, useCollection, useMemoFirebase } from "@/firebase";
-import { collection, serverTimestamp, setDoc, doc } from "firebase/firestore";
+import { useFirestore, useUser, addDocumentNonBlocking, useCollection, useMemoFirebase, setDocumentNonBlocking } from "@/firebase";
+import { collection, serverTimestamp, doc } from "firebase/firestore";
 import { Loader2 } from "lucide-react";
 import type { Employee } from "@/lib/types";
 
@@ -83,23 +83,15 @@ export default function PunchClock() {
             horaDarreraEntrada: serverTimestamp(),
         };
 
-        // We use setDoc here to create or overwrite the document with the employee's ID.
-        // This ensures that if they punch in again, their entry time is updated.
-        setDoc(employeeDocRef, employeeData)
-            .then(() => {
-                toast({
-                    title: 'Entrada Manual Registrada',
-                    description: `S'ha registrat l'entrada per a ${selectedEmployee.firstName} ${selectedEmployee.lastName}.`,
-                });
-                setEmployeeValue(""); // Reset dropdown
-            })
-            .catch((error) => {
-                 toast({
-                    variant: "destructive",
-                    title: "Error en el registre",
-                    description: "No s'ha pogut registrar l'entrada. Intenta-ho de nou.",
-                });
-            });
+        // We use setDocumentNonBlocking here to create or overwrite the document with the employee's ID.
+        // This ensures that if they punch in again, their entry time is updated, and we get rich errors on failure.
+        setDocumentNonBlocking(employeeDocRef, employeeData, { merge: false });
+        
+        toast({
+            title: 'Entrada Manual Registrada',
+            description: `S'ha registrat l'entrada per a ${selectedEmployee.firstName} ${selectedEmployee.lastName}.`,
+        });
+        setEmployeeValue(""); // Reset dropdown
     }
   };
 
@@ -113,13 +105,12 @@ export default function PunchClock() {
       return;
     }
 
-    const visitData = {
-      name: visitorName,
-      company: visitorCompany,
-      timestamp: serverTimestamp(),
-    };
-
     if (firestore) {
+        const visitData = {
+          name: visitorName,
+          company: visitorCompany,
+          timestamp: serverTimestamp(),
+        };
         const visitsCollection = collection(firestore, 'visit_registrations');
         addDocumentNonBlocking(visitsCollection, visitData);
 
