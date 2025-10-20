@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
-import { collection, query, where, orderBy, limit, startAfter, QueryDocumentSnapshot, DocumentData, or } from "firebase/firestore";
+import { collection, query, where, orderBy, limit, startAfter, QueryDocumentSnapshot, DocumentData, and } from "firebase/firestore";
 import { Loader2, BookUser, Mail, Phone, Search, ChevronsUpDown, Check, XIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -41,8 +41,6 @@ export default function DirectoryPage() {
     const directoriQuery = useMemoFirebase(() => {
         if (!firestore) return null;
 
-        let q = query(collection(firestore, 'directori'));
-        
         const constraints = [];
 
         if (departmentFilter) {
@@ -52,16 +50,14 @@ export default function DirectoryPage() {
         const nameFilterTrimmed = nameFilter.trim();
         if (nameFilterTrimmed) {
             const nameEnd = nameFilterTrimmed.slice(0, -1) + String.fromCharCode(nameFilterTrimmed.charCodeAt(nameFilterTrimmed.length - 1) + 1);
-            constraints.push(
-                or(
-                    where('nom', '>=', nameFilterTrimmed),
-                    where('nom', '<', nameEnd)
-                )
-            );
+            constraints.push(and(
+                where('nom', '>=', nameFilterTrimmed),
+                where('nom', '<', nameEnd)
+            ));
         }
 
-        q = query(
-            q, 
+        const q = query(
+            collection(firestore, 'directori'), 
             ...constraints,
             orderBy('nom'), 
             startAfter(paginationCursors[currentPage] || null),
@@ -80,7 +76,7 @@ export default function DirectoryPage() {
 
     const handleNextPage = () => {
         if (hasNextPage && employeesData) {
-            const lastDoc = employeesData[employeesData.length - 2];
+            const lastDoc = employeesData[employeesData.length - 2]; 
             const newCursors = [...paginationCursors];
             newCursors[currentPage + 1] = lastDoc;
             setPaginationCursors(newCursors);
@@ -169,7 +165,7 @@ export default function DirectoryPage() {
                                                 <Check className={cn("mr-2 h-4 w-4", departmentFilter === "" ? "opacity-100" : "opacity-0")} />
                                                 Todos los departamentos
                                              </CommandItem>
-                                            {departments.map((dep) => (
+                                            {departments && departments.map((dep) => (
                                                 <CommandItem
                                                     key={dep}
                                                     value={dep}
