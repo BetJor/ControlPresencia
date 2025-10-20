@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
-import { collection, query, where, orderBy, limit, startAfter, QueryDocumentSnapshot, DocumentData, and } from "firebase/firestore";
+import { collection, query, where, orderBy, limit, startAfter, QueryDocumentSnapshot, DocumentData, or } from "firebase/firestore";
 import { Loader2, BookUser, Mail, Phone, Search, ChevronsUpDown, Check, XIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -41,11 +41,18 @@ export default function DirectoryPage() {
     // --- Base Query Logic ---
     const baseQuery = useMemoFirebase(() => {
         if (!firestore) return null;
-        const constraints = [];
+        let q = query(collection(firestore, 'directori'));
+        
+        const filters = [];
         if (departmentFilter) {
-            constraints.push(where('departament', '==', departmentFilter));
+            filters.push(where('departament', '==', departmentFilter));
         }
-        return query(collection(firestore, 'directori'), ...constraints);
+
+        if (filters.length > 0) {
+            q = query(q, ...filters);
+        }
+
+        return q;
     }, [firestore, departmentFilter]);
 
 
@@ -55,7 +62,7 @@ export default function DirectoryPage() {
         return query(
             baseQuery,
             orderBy('nom'), 
-            startAfter(paginationCursors[currentPage] || null),
+            startAfter(paginationCursors[currentPage]),
             limit(PAGE_SIZE + 1)
         );
     }, [firestore, baseQuery, nameFilter, currentPage, paginationCursors]);
@@ -81,19 +88,30 @@ export default function DirectoryPage() {
         );
     }, [firestore, baseQuery, nameFilter]);
 
+    const onNewData = useCallback((snapshot: QueryDocumentSnapshot<DocumentData>) => {
+        if (nameFilter) return; // Do not manage pagination state when filtering
+        const hasMore = snapshot.docs.length > PAGE_SIZE;
+
+        if (hasMore) {
+            const nextCursor = snapshot.docs[snapshot.docs.length - 2];
+            setPaginationCursors(prev => {
+                const newCursors = [...prev];
+                if (currentPage + 1 < newCursors.length) {
+                     // If we are revisiting a page, we don't need to update the cursor
+                    if (newCursors[currentPage + 1]?.id !== nextCursor.id) {
+                       newCursors[currentPage + 1] = nextCursor;
+                    }
+                } else {
+                    newCursors.push(nextCursor);
+                }
+                return newCursors;
+            });
+        }
+    }, [nameFilter, currentPage, PAGE_SIZE]);
+
+
     // --- Data Fetching ---
-    const { data: paginatedEmployeesData, isLoading: isLoadingPaginated } = useCollection<Directori>(paginatedQuery, { onNewData: (snapshot) => {
-         if (nameFilter) return;
-         const hasMore = snapshot.docs.length > PAGE_SIZE;
-         if (hasMore && paginatedEmployeesData) {
-            const lastDoc = snapshot.docs[snapshot.docs.length - 2];
-             if (paginationCursors.length <= currentPage + 1) {
-                 const newCursors = [...paginationCursors];
-                 newCursors[currentPage + 1] = lastDoc;
-                 setPaginationCursors(newCursors);
-             }
-         }
-    }});
+    const { data: paginatedEmployeesData, isLoading: isLoadingPaginated } = useCollection<Directori>(paginatedQuery, { onNewData });
     const { data: nameFilteredEmployees, isLoading: isLoadingName } = useCollection<Directori>(nameFilterQuery);
     const { data: lastNameFilteredEmployees, isLoading: isLoadingLastName } = useCollection<Directori>(lastNameFilterQuery);
 
@@ -324,3 +342,5 @@ export default function DirectoryPage() {
         </Card>
     )
 }
+
+    
