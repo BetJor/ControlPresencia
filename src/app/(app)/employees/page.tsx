@@ -246,7 +246,7 @@ export default function DirectoryPage() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead className="w-[300px]">Nombre</TableHead>
-                                    <TableHead>Cargo</TableHead>
+                                    <TableHead>Id</TableHead>
                                     <TableHead className="hidden md:table-cell">Departamento</TableHead>
                                     <TableHead className="text-right">Contacto</TableHead>
                                 </TableRow>
@@ -269,10 +269,7 @@ export default function DirectoryPage() {
                                             </div>
                                         </TableCell>
                                         <TableCell>
-                                            <div>
-                                                <p className="font-medium">{employee.carrec}</p>
-                                                <p className="text-sm text-muted-foreground">{employee.descripcioCarrec}</p>
-                                            </div>
+                                            <p className="font-medium">{employee.centreCost}</p>
                                         </TableCell>
                                         <TableCell className="hidden md:table-cell">
                                             <Badge variant="secondary">{employee.departament}</Badge>

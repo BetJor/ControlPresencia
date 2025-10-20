@@ -120,7 +120,7 @@ exports.importarUsuarisAGoogleWorkspace = functions
             if (user.phones && user.phones.length > 0) {
                 const phoneSet = new Set();
                 for (const p of user.phones) {
-                    if (p && typeof p.value === 'string' && p.value.length > 0) {
+                    if (p === null || p === void 0 ? void 0 : p.value) {
                         phoneSet.add(p.value.trim());
                     }
                 }
@@ -199,12 +199,13 @@ exports.sincronitzarPersonalPresent = functions
     .region('europe-west1')
     .pubsub.schedule('every 5 minutes')
     .onRun(async (context) => {
-    console.log("Iniciant la sincronització de personal present.");
+    console.log("TRACE: Iniciant la sincronització de personal present.");
     const APP_ID = "94c06d4b-4ed0-49d4-85a9-003710c7038b";
     const APP_ACCESS_KEY = "V2-LINid-jygnH-4Eqx6-xEe13-kXpTW-ZALoX-yY7yc-q9EMj";
     const db = (0, firestore_1.getFirestore)();
     try {
         // 1. Obtenir fitxatges de AppSheet
+        console.log("TRACE: Obtenint fitxatges d'AppSheet...");
         const url = `https://api.appsheet.com/api/v2/apps/${APP_ID}/tables/dbo.Google_EntradasSalidas/Action`;
         const body = JSON.stringify({ "Action": "Find", "Properties": {}, "Rows": [] });
         const response = await (0, node_fetch_1.default)(url, {
@@ -221,23 +222,28 @@ exports.sincronitzarPersonalPresent = functions
             throw new Error(`Error de l'API d'AppSheet: ${response.statusText}`);
         }
         const fitxatges = await response.json();
+        console.log(`TRACE: S'han rebut ${fitxatges.length} fitxatges d'AppSheet.`);
         // 2. Processar i calcular usuaris presents
+        console.log("TRACE: Processant fitxatges per determinar usuaris presents...");
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const userPunches = {};
         for (const fitxatge of fitxatges) {
             const dateStr = fitxatge['Fecha y Hora'] || fitxatge['Data'];
             if (!dateStr || typeof dateStr !== 'string') {
-                continue; // Skip if date is missing or not a string
+                console.warn("TRACE: Ometent fitxatge sense data o amb format invàlid:", fitxatge);
+                continue;
             }
             const employeeId = fitxatge.P_CI;
             if (!employeeId || typeof employeeId !== 'string') {
+                console.warn("TRACE: Ometent fitxatge sense P_CI o amb format invàlid:", fitxatge);
                 continue;
             }
-            // AppSheet dates are 'MM/DD/YYYY HH:mm:ss'
             const parts = dateStr.split(/[\s/:]+/); // MM, DD, YYYY, HH, mm, ss
-            if (parts.length < 6)
+            if (parts.length < 6) {
+                console.warn("TRACE: Ometent fitxatge amb data en format inesperat:", fitxatge);
                 continue;
+            }
             const date = new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]), parseInt(parts[3]), parseInt(parts[4]), parseInt(parts[5]));
             if (date >= today) {
                 if (!userPunches[employeeId]) {
@@ -249,7 +255,7 @@ exports.sincronitzarPersonalPresent = functions
         const presentUsers = {};
         for (const employeeId in userPunches) {
             const punches = userPunches[employeeId];
-            if (punches.length % 2 !== 0) { // Odd number of punches means they are in
+            if (punches.length % 2 !== 0) { // Nombre senar de fitxatges = DINS
                 punches.sort((a, b) => b.parsedDate - a.parsedDate);
                 const lastPunch = punches[0];
                 presentUsers[employeeId] = {
@@ -258,28 +264,71 @@ exports.sincronitzarPersonalPresent = functions
             }
         }
         const presentUserIds = Object.keys(presentUsers);
+        console.log(`TRACE: Usuaris presents calculats: ${presentUserIds.length}. IDs:`, presentUserIds);
         // 3. Sincronitzar amb Firestore
-        const usuarisDinsFirestoreSnapshot = await db.collection('usuaris_dins').get();
-        const usuarisDinsFirestoreIds = usuarisDinsFirestoreSnapshot.docs.map(doc => doc.id);
-        const usuarisPerAfegirOActualitzar = presentUserIds;
-        const usuarisPerEliminar = usuarisDinsFirestoreIds.filter(id => !presentUserIds.includes(id));
-        const batch = db.batch();
-        // Add or update users who are present
-        for (const userId of usuarisPerAfegirOActualitzar) {
-            const docRef = db.collection('usuaris_dins').doc(userId);
-            batch.set(docRef, presentUsers[userId], { merge: true });
+        console.log("TRACE: Iniciant sincronització amb Firestore.");
+        if (presentUserIds.length > 0) {
+            const usuarisDinsFirestoreSnapshot = await db.collection('usuaris_dins').get();
+            const usuarisDinsFirestoreIds = usuarisDinsFirestoreSnapshot.docs.map(doc => doc.id);
+            console.log("TRACE: Obtenint dades del directori per als usuaris presents...");
+            const directoriUsersMap = new Map();
+            // Dividir presentUserIds en trossos de 30
+            const chunkSize = 30;
+            for (let i = 0; i < presentUserIds.length; i += chunkSize) {
+                const chunk = presentUserIds.slice(i, i + chunkSize);
+                console.log(`TRACE: Processant tros ${i / chunkSize + 1} del directori amb ${chunk.length} usuaris.`);
+                const directoriQuerySnapshot = await db.collection('directori').where(firestore_1.FieldPath.documentId(), 'in', chunk).get();
+                directoriQuerySnapshot.forEach(doc => {
+                    const data = doc.data();
+                    directoriUsersMap.set(doc.id, {
+                        nom: data.nom || '',
+                        cognom: data.cognom || ''
+                    });
+                });
+            }
+            console.log(`TRACE: S'han trobat ${directoriUsersMap.size} usuaris al directori.`);
+            const presentUserIdsSet = new Set(presentUserIds);
+            const usuarisPerEliminar = usuarisDinsFirestoreIds.filter(id => !presentUserIdsSet.has(id));
+            console.log(`TRACE: Usuaris a eliminar de 'usuaris_dins': ${usuarisPerEliminar.length}. IDs:`, usuarisPerEliminar);
+            const batch = db.batch();
+            console.log("TRACE: Preparant batch per actualitzar 'usuaris_dins'...");
+            for (const userId of presentUserIds) {
+                const userInfo = directoriUsersMap.get(userId);
+                if (!userInfo) {
+                    console.warn(`WARN: No s'ha trobat l'usuari amb P_CI (ID) '${userId}' al directori. S'utilitzarà 'N/A'.`);
+                }
+                const docRef = db.collection('usuaris_dins').doc(userId);
+                const dataToSet = Object.assign(Object.assign({}, presentUsers[userId]), { nom: (userInfo === null || userInfo === void 0 ? void 0 : userInfo.nom) || 'N/A', cognom: (userInfo === null || userInfo === void 0 ? void 0 : userInfo.cognom) || 'N/A' });
+                batch.set(docRef, dataToSet, { merge: true });
+            }
+            for (const userId of usuarisPerEliminar) {
+                const docRef = db.collection('usuaris_dins').doc(userId);
+                batch.delete(docRef);
+            }
+            console.log("TRACE: Executant batch a Firestore...");
+            await batch.commit();
+            console.log(`Sincronització finalitzada. Presents: ${presentUserIds.length}, Eliminats: ${usuarisPerEliminar.length}`);
         }
-        // Remove users who are no longer present
-        for (const userId of usuarisPerEliminar) {
-            const docRef = db.collection('usuaris_dins').doc(userId);
-            batch.delete(docRef);
+        else {
+            console.log("TRACE: No hi ha usuaris presents segons AppSheet.");
+            const usuarisDinsFirestoreSnapshot = await db.collection('usuaris_dins').get();
+            if (!usuarisDinsFirestoreSnapshot.empty) {
+                console.log(`TRACE: Buidant la col·lecció 'usuaris_dins' (conté ${usuarisDinsFirestoreSnapshot.size} registres).`);
+                const batch = db.batch();
+                usuarisDinsFirestoreSnapshot.docs.forEach(doc => {
+                    batch.delete(doc.ref);
+                });
+                await batch.commit();
+                console.log(`Sincronització finalitzada. S'han eliminat ${usuarisDinsFirestoreSnapshot.size} registres de 'usuaris_dins'.`);
+            }
+            else {
+                console.log("Sincronització finalitzada. No hi ha usuaris presents i 'usuaris_dins' ja està buida.");
+            }
         }
-        await batch.commit();
-        console.log(`Sincronització finalitzada. Presents: ${usuarisPerAfegirOActualitzar.length}, Eliminats: ${usuarisPerEliminar.length}`);
         return null;
     }
     catch (error) {
-        console.error("Error durant la sincronització de personal present:", error);
+        console.error("ERROR FATAL durant la sincronització de personal present:", error.message, error.stack);
         return null;
     }
 });
