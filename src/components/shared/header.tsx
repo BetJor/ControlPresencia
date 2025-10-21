@@ -1,3 +1,5 @@
+'use client';
+
 import Link from 'next/link';
 import {
   Home,
@@ -20,9 +22,25 @@ import {
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import Image from 'next/image';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
+import { useUser, useAuth } from '@/firebase';
+import { signOut } from 'firebase/auth';
+import { useRouter } from 'next/navigation';
+
 
 export default function Header() {
-    const userAvatar = PlaceHolderImages.find(p => p.id === 'user1');
+    const { user } = useUser();
+    const auth = useAuth();
+    const router = useRouter();
+    const userAvatarUrl = user?.photoURL || PlaceHolderImages.find(p => p.id === 'user5')?.imageUrl;
+
+    const handleSignOut = () => {
+        if (auth) {
+            signOut(auth).then(() => {
+                router.push('/login');
+            });
+        }
+    };
+
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
       <Sheet>
@@ -82,26 +100,25 @@ export default function Header() {
             size="icon"
             className="overflow-hidden rounded-full"
           >
-            {userAvatar && (
+            {userAvatarUrl && (
                  <Image
-                    src={userAvatar.imageUrl}
+                    src={userAvatarUrl}
                     width={36}
                     height={36}
-                    alt="Avatar"
-                    data-ai-hint={userAvatar.imageHint}
+                    alt={user?.displayName || 'Avatar'}
                     className="overflow-hidden rounded-full"
                 />
             )}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
+          <DropdownMenuLabel>{user?.displayName || user?.email || 'Mi Cuenta'}</DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem>Ajustes</DropdownMenuItem>
           <DropdownMenuItem>Soporte</DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem asChild>
-            <Link href="/login">Cerrar sesión</Link>
+          <DropdownMenuItem onClick={handleSignOut}>
+            Cerrar sesión
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

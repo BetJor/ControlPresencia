@@ -4,10 +4,22 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { PlaceHolderImages } from "@/lib/placeholder-images";
 import { Clock } from "lucide-react";
 import Image from "next/image";
-import { useAuth, useUser, initiateAnonymousSignIn } from '@/firebase';
+import { useAuth, useUser, initiateGoogleSignIn } from '@/firebase';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
+
+// Google Icon SVG component
+const GoogleIcon = () => (
+  <svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <title>Google</title>
+    <path
+      d="M12.48 10.92v3.28h7.84c-.24 1.84-.85 3.18-1.73 4.1-1.05 1.05-2.58 2.6-5.82 2.6-4.96 0-9-3.96-9-9s4.04-9 9-9c2.86 0 4.64 1.25 5.74 2.25l2.43-2.33C18.4 2.02 15.65 1 12.48 1 5.8 1 1 5.8 1 12s4.8 11 11.48 11c3.54 0 6.3-1.2 8.35-3.35 2.1-2.1 2.8-5.05 2.8-7.95v-1.2H12.48z"
+      fill="currentColor"
+    />
+  </svg>
+);
+
 
 export default function LoginPage() {
   const loginBg = PlaceHolderImages.find(p => p.id === 'login-background');
@@ -23,10 +35,10 @@ export default function LoginPage() {
     }
   }, [user, isUserLoading, router]);
 
-  const handleAnonymousLogin = () => {
+  const handleGoogleLogin = () => {
     setIsLoggingIn(true);
     if(auth) {
-      initiateAnonymousSignIn(auth);
+      initiateGoogleSignIn(auth);
     }
   };
   
@@ -52,12 +64,13 @@ export default function LoginPage() {
               <h1 className="text-3xl font-bold font-headline">Clockwork</h1>
             </div>
             <p className="text-balance text-muted-foreground">
-              Pulsa el botón para acceder a la aplicación.
+              Inicia sessió amb el teu compte de Google per accedir.
             </p>
           </div>
           <div className="grid gap-4">
-            <Button onClick={handleAnonymousLogin} className="w-full" disabled={isLoggingIn}>
-              Acceder como invitado
+            <Button onClick={handleGoogleLogin} className="w-full" variant="outline" disabled={isLoggingIn}>
+              <GoogleIcon />
+              Entra amb Google
             </Button>
           </div>
         </div>
