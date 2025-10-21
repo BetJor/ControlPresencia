@@ -22,7 +22,7 @@ import {
   deleteDocumentNonBlocking,
 } from '@/firebase';
 import type { VisitRegistration, UsuariDins, Directori } from '@/lib/types';
-import { collection, query, where, doc, getDocs } from 'firebase/firestore';
+import { collection, query, where, doc } from 'firebase/firestore';
 import { Contact, Users, User, Loader2, LogOut } from 'lucide-react';
 import {
   Accordion,
@@ -41,15 +41,15 @@ import {
 
 export default function PresentPeopleList() {
   const firestore = useFirestore();
-  const [presentVisitors, setPresentVisitors] = useState<VisitRegistration[]>(
-    []
-  );
 
-  // Col·leccions de Firestore
+  // 1. Get the list of present staff IDs
   const usuarisDinsCollection = useMemoFirebase(
     () => (firestore ? collection(firestore, 'usuaris_dins') : null),
     [firestore]
   );
+  const { data: presentStaffRaw, isLoading: staffLoading } = useCollection<UsuariDins>(usuarisDinsCollection);
+
+  // 2. Get the list of present visitors
   const visitorsCollection = useMemoFirebase(() => {
     if (!firestore) return null;
     const today = new Date();
@@ -59,46 +59,42 @@ export default function PresentPeopleList() {
       where('timestamp', '>=', today)
     );
   }, [firestore]);
-
-  // Obtenció de dades
-  const { data: presentStaffRaw, isLoading: staffLoading } =
-    useCollection<UsuariDins>(usuarisDinsCollection);
-  const { data: visitors, isLoading: visitorsLoading } =
-    useCollection<VisitRegistration>(visitorsCollection);
+  const { data: visitors, isLoading: visitorsLoading } = useCollection<VisitRegistration>(visitorsCollection);
 
   const presentStaffIds = useMemo(() => {
     return presentStaffRaw?.map(staff => staff.id) ?? [];
   }, [presentStaffRaw]);
   
+  // 3. Create a memoized query to get details for ONLY the present staff
   const staffDetailsQuery = useMemoFirebase(() => {
+    // Return null if we don't have the IDs yet, to prevent running a query for `where in []` which is invalid.
     if (!firestore || presentStaffIds.length === 0) return null;
-    return query(collection(firestore, 'directori'), where('centreCost', 'in', presentStaffIds));
+    // Use 'in' query to fetch all matching documents in one go. Max 30 IDs per query.
+    // For more than 30, you'd need to split into multiple queries.
+    return query(collection(firestore, 'directori'), where('centreCost', 'in', presentStaffIds.slice(0, 30)));
   }, [firestore, presentStaffIds]);
 
+  // 4. Execute the query to get the detailed staff info
   const { data: detailedStaff, isLoading: staffDetailsLoading } = useCollection<Directori>(staffDetailsQuery);
 
+  // 5. Enrich the raw staff data with details once both are loaded
   const enrichedStaff = useMemo(() => {
     if (!presentStaffRaw || !detailedStaff) return [];
     
+    // Create a map for quick lookups
     const staffMap = new Map(detailedStaff.map(s => [s.centreCost, s]));
     
     return presentStaffRaw.map(present => {
       const details = staffMap.get(present.id);
       return {
         ...present,
+        // Fallback to the data from `usuaris_dins` if no details are found in `directori`
         nom: details?.nom ?? present.nom,
         cognom: details?.cognom ?? present.cognoms,
       };
-    });
+    }).sort((a, b) => a.cognom.localeCompare(b.cognom));
   }, [presentStaffRaw, detailedStaff]);
 
-
-  // Actualitza les visites presents quan canvien les dades
-  useEffect(() => {
-    if (visitors) {
-      setPresentVisitors(visitors);
-    }
-  }, [visitors]);
 
   const handleVisitorCheckout = (visitorId: string) => {
     if (firestore && visitorId) {
@@ -114,9 +110,8 @@ export default function PresentPeopleList() {
     }
   };
 
-
   const isLoading = staffLoading || visitorsLoading || staffDetailsLoading;
-  const totalPresent = (enrichedStaff?.length || 0) + presentVisitors.length;
+  const totalPresent = (enrichedStaff?.length || 0) + (visitors?.length || 0);
 
   const getFormattedTime = (timestamp: any) => {
     if (timestamp && typeof timestamp.toDate === 'function') {
@@ -150,11 +145,11 @@ export default function PresentPeopleList() {
                 <AccordionTrigger className="text-base font-medium">
                   <div className="flex items-center gap-2">
                     <Contact className="h-5 w-5" />
-                    <span>Visites ({presentVisitors.length})</span>
+                    <span>Visites ({(visitors?.length || 0)})</span>
                   </div>
                 </AccordionTrigger>
                 <AccordionContent>
-                  {presentVisitors.length > 0 ? (
+                  {visitors && visitors.length > 0 ? (
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -169,7 +164,7 @@ export default function PresentPeopleList() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {presentVisitors.map((visitor) => (
+                        {visitors.map((visitor) => (
                           <TableRow key={`vis-${visitor.id}`} className="text-sm">
                             <TableCell className="py-2 px-3">
                               <div className="font-medium">{visitor.name}</div>

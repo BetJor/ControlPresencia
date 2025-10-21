@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
-import { collection, query, where, orderBy, getDocs, or } from "firebase/firestore";
+import { useFirestore, useMemoFirebase } from "@/firebase";
+import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
 import { Loader2, BookUser, Mail, Phone, Search, ChevronsUpDown, Check, XIcon, ArrowUp, ArrowDown } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import type { Directori } from "@/lib/types";
+import { useCollection } from '@/firebase/firestore/use-collection';
+import { useToast } from '@/hooks/use-toast';
 
 type SortKey = 'nom' | 'cognom' | 'centreCost';
 type SortDirection = 'asc' | 'desc';
@@ -25,6 +27,7 @@ type Department = {
 
 export default function DirectoryPage() {
     const firestore = useFirestore();
+    const { toast } = useToast();
     const [nameFilter, setNameFilter] = useState('');
     const [departmentFilter, setDepartmentFilter] = useState('');
     const [departmentOpen, setDepartmentOpen] = useState(false);
@@ -67,71 +70,65 @@ export default function DirectoryPage() {
             setHasSearched(false);
              toast({
                 variant: "destructive",
-                title: "Error",
-                description: "Por favor, introduce un nombre o selecciona un departamento para buscar.",
+                title: "Error de búsqueda",
+                description: "Por favor, introduce un nombre/apellido o selecciona un departamento para buscar.",
             });
             return;
         }
 
         setIsLoading(true);
         setHasSearched(true);
+        setEmployees([]);
 
         const baseCollection = collection(firestore, 'directori');
         let finalQuery;
 
-        // Prioritize department filter if both are present
         if (departmentFilter) {
-             finalQuery = query(
-                baseCollection,
-                where('departament', '==', departmentFilter)
-            );
+             finalQuery = query(baseCollection, where('departament', '==', departmentFilter));
         } else if (searchTerm) {
-            const searchTermLower = searchTerm.toLowerCase();
-            const searchTermCapitalized = searchTerm.charAt(0).toUpperCase() + searchTerm.slice(1);
-            
-            // This OR query might require a composite index in Firestore.
-            // Firestore will provide a link in the console error to create it if needed.
+            // Firestore does not support case-insensitive or partial text search on its own.
+            // We search for names/surnames starting with the term.
+            const endTerm = searchTerm.slice(0, -1) + String.fromCharCode(searchTerm.charCodeAt(searchTerm.length - 1) + 1);
             finalQuery = query(
                 baseCollection,
-                or(
-                    where('nom', '>=', searchTerm),
-                    where('nom', '>=', searchTermLower),
-                    where('nom', '>=', searchTermCapitalized),
-                    where('cognom', '>=', searchTerm),
-                    where('cognom', '>=', searchTermLower),
-                    where('cognom', '>=', searchTermCapitalized)
-                )
-            );
-
+                where('nom', '>=', searchTerm),
+                where('nom', '<', endTerm)
+             );
         } else {
              setIsLoading(false);
-             setEmployees([]);
              return;
         }
-
 
         try {
             const querySnapshot = await getDocs(finalQuery);
             let fetchedEmployees = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Directori);
 
-            // Client-side filtering because Firestore string searches are case-sensitive and prefix-based.
-            if (searchTerm) {
+            // If we are searching by name, we also need to search by surname and merge.
+            if (searchTerm && !departmentFilter) {
+                const endTerm = searchTerm.slice(0, -1) + String.fromCharCode(searchTerm.charCodeAt(searchTerm.length - 1) + 1);
+                 const surnameQuery = query(
+                    baseCollection,
+                    where('cognom', '>=', searchTerm),
+                    where('cognom', '<', endTerm)
+                );
+                const surnameSnapshot = await getDocs(surnameQuery);
+                const surnameEmployees = surnameSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Directori);
+                
+                // Merge and remove duplicates
+                const employeeMap = new Map<string, Directori>();
+                fetchedEmployees.forEach(emp => employeeMap.set(emp.id, emp));
+                surnameEmployees.forEach(emp => employeeMap.set(emp.id, emp));
+                fetchedEmployees = Array.from(employeeMap.values());
+            }
+
+            // If both filters are active, filter the department results by name client-side
+            if (departmentFilter && searchTerm) {
                 const lowercasedSearch = searchTerm.toLowerCase();
-                fetchedEmployees = fetchedEmployees.filter(emp => 
-                    emp.nom.toLowerCase().startsWith(lowercasedSearch) || 
+                fetchedEmployees = fetchedEmployees.filter(emp =>
+                    emp.nom.toLowerCase().startsWith(lowercasedSearch) ||
                     emp.cognom.toLowerCase().startsWith(lowercasedSearch)
                 );
             }
-
-             if (departmentFilter && searchTerm) {
-                const lowercasedSearch = searchTerm.toLowerCase();
-                fetchedEmployees = fetchedEmployees.filter(emp =>
-                    emp.departament === departmentFilter &&
-                    (emp.nom.toLowerCase().startsWith(lowercasedSearch) ||
-                     emp.cognom.toLowerCase().startsWith(lowercasedSearch))
-                );
-            }
-
             
             const sorted = fetchedEmployees.sort((a,b) => {
                 const aVal = a[sortConfig.key] || '';
@@ -144,6 +141,11 @@ export default function DirectoryPage() {
         } catch (error) {
             console.error("Error searching employees:", error);
             setEmployees([]);
+             toast({
+                variant: "destructive",
+                title: "Error de búsqueda",
+                description: "Ocurrió un error al buscar. Revisa las reglas de seguridad de Firestore si el problema persiste.",
+            });
         } finally {
             setIsLoading(false);
         }
@@ -155,16 +157,8 @@ export default function DirectoryPage() {
     };
 
     const handleDepartmentSelect = (depName: string) => {
-        const newFilter = depName;
-        setDepartmentFilter(newFilter);
+        setDepartmentFilter(depName);
         setDepartmentOpen(false);
-        // Automatically search when a department is selected
-        if (newFilter) {
-            // A bit of a hack to make sure the state is updated before searching
-            setTimeout(() => performSearch(), 0);
-        } else {
-            clearFilters();
-        }
     };
     
     const clearFilters = () => {
@@ -270,7 +264,7 @@ export default function DirectoryPage() {
                 {effectiveIsLoading ? (
                     <div className="flex items-center justify-center py-8">
                         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                        <p className="ml-2">Buscando empleados...</p>
+                        <p className="ml-2">Cargando...</p>
                     </div>
                 ) : hasSearched && employees.length > 0 ? (
                     <>

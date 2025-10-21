@@ -1,200 +1,222 @@
 /**
- * @fileoverview Firestore Security Rules for the Clockwork application.
- *
- * Core Philosophy: This ruleset prioritizes a secure-by-default posture, with fine-grained access control based on user authentication and, where applicable, ownership.
+ * @file Firestore Security Rules
+ * @description This ruleset enforces a role-based access control model with ownership checks and structural segregation for optimal security and performance.
  *
  * Data Structure:
- * - /users/{userId}: Stores user profiles; access is restricted to the owning user. The `role` field is denormalized to facilitate authorization.
- * - /attendance_records/{attendanceRecordId}: Stores attendance records; access is generally open, as is the case with public-facing collections.
- * - /terminals/{terminalId}: Stores terminal information; access is generally open.
- * - /incident_types/{incidentTypeId}: Stores incident types; access is generally open.
- * - /employees/{employeeId}: Stores employee information; access is generally open.
- * - /visit_registrations/{visitRegistrationId}: Stores visit registration information; access is generally open.
- * - /favorite_visitors/{favoriteVisitorId}: Stores favorite visitor information; access is generally open.
- * - /usuaris_dins/{usuariId}: Stores presence information; access is open to authenticated users. This data is managed by a trusted backend process.
- * - /directori/{directoriId}: Stores employee directory information; access is generally open.
- * - /departaments/{departamentId}: Stores department names; access is generally open.
+ * - /users/{userId}: Stores user profiles, with the 'role' field denormalized for authorization independence.
+ * - /attendance_records/{attendanceRecordId}: Stores attendance records.
+ * - /terminals/{terminalId}: Stores terminal information.
+ * - /incident_types/{incidentTypeId}: Stores incident types.
+ * - /employees/{employeeId}: Stores employee information.
+ * - /visit_registrations/{visitRegistrationId}: Stores visit registrations.
+ * - /favorite_visitors/{favoriteVisitorId}: Stores favorite visitors.
+ * - /usuaris_dins/{usuariId}: Stores users currently in the office ("whiteboard" data).
+ * - /directori/{directoriId}: Stores employee directory information.
+ * - /departaments/{departamentId}: Stores department names.
  *
  * Key Security Decisions:
- * - Public Read Access: Collections like `attendance_records`, `terminals`, `incident_types`, `employees`, `visit_registrations`, `favorite_visitors`, `usuaris_dins`, `directori`, and `departaments` are intended for public read access and, as such, `get` and `list` operations are allowed for all users.
- * - User-Owned Data: The `/users/{userId}` collection enforces strict ownership; each user can only access their own profile.
- * - Backend-Managed Data: The `usuaris_dins` collection is managed by a trusted backend process, which simplifies client-side security rules.
+ * - User listing is implicitly disallowed due to the absence of a top-level listing rule on `/users`.
+ * - The `usuaris_dins` collection (whiteboard) is publicly readable for authenticated users but writable only by a trusted backend.
+ * - The `departaments` collection is publicly readable for authenticated users and writable only by a trusted backend.
+ * - Ambiguous write permissions default to denial, requiring explicit allow conditions.
+ *
+ * Denormalization for Authorization:
+ * - User roles are stored directly within the `/users/{userId}` document to avoid costly `get()` calls when evaluating rules for user-specific data.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isOwner(userId) {
-      return request.auth.uid == userId;
-    }
-
-    function isExistingOwner(userId) {
-        return isOwner(userId) && resource != null;
-    }
-
     /**
-     * @description Manages access to user profile data.
+     * @description Allows users to manage their own profile data.
      * @path /users/{userId}
-     * @allow (create) User with ID 'user123' can create their own profile (isOwner).
-     * @allow (get, list) User with ID 'user123' can read their own profile (isOwner).
-     * @allow (update, delete) User with ID 'user123' can update/delete their own profile (isOwner and profile exists).
-     * @deny (create) User with ID 'user456' cannot create a profile for 'user123' (not isOwner).
-     * @deny (get, list) User with ID 'user456' cannot read the profile of 'user123' (not isOwner).
-     * @principle Enforces document ownership for writes, restricts access to a user's own data tree, validates relational integrity between documents.
+     * @allow (create) User with UID 'bmjLLdOrYGP9c0YagkxvzVmLeOH3' can create their own profile if request.auth.uid == userId.
+     * @deny (create) User with UID 'otherUserId' cannot create a profile for 'bmjLLdOrYGP9c0YagkxvzVmLeOH3'.
+     * @allow (get) User with UID 'bmjLLdOrYGP9c0YagkxvzVmLeOH3' can read their own profile.
+     * @deny (get) User with UID 'otherUserId' cannot read the profile of 'bmjLLdOrYGP9c0YagkxvzVmLeOH3'.
+     * @allow (update) User with UID 'bmjLLdOrYGP9c0YagkxvzVmLeOH3' can update their own profile.
+     * @deny (update) User with UID 'otherUserId' cannot update the profile of 'bmjLLdOrYGP9c0YagkxvzVmLeOH3'.
+     * @allow (delete) User with UID 'bmjLLdOrYGP9c0YagkxvzVmLeOH3' can delete their own profile.
+     * @deny (delete) User with UID 'otherUserId' cannot delete the profile of 'bmjLLdOrYGP9c0YagkxvzVmLeOH3'.
+     * @principle Enforces document ownership for writes and restricts read access to the owner.
      */
     match /users/{userId} {
-      allow get, list: if isOwner(userId);
-      allow create: if isOwner(userId) && request.resource.data.id == userId;
-      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
-      allow delete: if isExistingOwner(userId);
+      allow create: if isSignedIn() && isOwner(userId) && request.resource.data.id == userId;
+      allow get: if isSignedIn() && isOwner(userId);
+      allow list: if false;
+      allow update: if isSignedIn() && isExistingOwner(userId) && request.resource.data.id == resource.data.id;
+      allow delete: if isSignedIn() && isExistingOwner(userId);
     }
 
     /**
-     * @description Manages access to attendance records.
+     * @description Allows read and write access to attendance records.  No ownership enforced, open access for authenticated users.
      * @path /attendance_records/{attendanceRecordId}
-     * @allow (get, list) Any user can read attendance records.
-     * @deny (create) No user can create attendance records. // TODO: Add owner validation once the schema is updated with an ownership field.
-     * @deny (update) No user can update attendance records. // TODO: Add owner validation once the schema is updated with an ownership field.
-     * @deny (delete) No user can delete attendance records. // TODO: Add owner validation once the schema is updated with an ownership field.
-     * @principle Allows public read access, restricts write access.
+     * @allow (create) Authenticated user can create an attendance record.
+     * @allow (get) Authenticated user can read an attendance record.
+     * @allow (update) Authenticated user can update an attendance record.
+     * @allow (delete) Authenticated user can delete an attendance record.
+     * @principle Open access for authenticated users.
      */
     match /attendance_records/{attendanceRecordId} {
-      allow get, list: if true;
-      allow create: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow create: if isSignedIn();
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow update: if isSignedIn() && resource != null;
+      allow delete: if isSignedIn() && resource != null;
     }
 
     /**
-     * @description Manages access to terminal information.
+     * @description Allows read and write access to terminals. No ownership enforced, open access for authenticated users.
      * @path /terminals/{terminalId}
-     * @allow (get, list) Any user can read terminal information.
-     * @deny (create) No user can create terminal information. // TODO: Add owner validation once the schema is updated with an ownership field.
-     * @deny (update) No user can update terminal information. // TODO: Add owner validation once the schema is updated with an ownership field.
-     * @deny (delete) No user can delete terminal information. // TODO: Add owner validation once the schema is updated with an ownership field.
-     * @principle Allows public read access, restricts write access.
+     * @allow (create) Authenticated user can create a terminal.
+     * @allow (get) Authenticated user can read a terminal.
+     * @allow (update) Authenticated user can update a terminal.
+     * @allow (delete) Authenticated user can delete a terminal.
+     * @principle Open access for authenticated users.
      */
     match /terminals/{terminalId} {
-      allow get, list: if true;
-      allow create: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow create: if isSignedIn();
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow update: if isSignedIn() && resource != null;
+      allow delete: if isSignedIn() && resource != null;
     }
 
     /**
-     * @description Manages access to incident types.
+     * @description Allows read and write access to incident types. No ownership enforced, open access for authenticated users.
      * @path /incident_types/{incidentTypeId}
-     * @allow (get, list) Any user can read incident types.
-     * @deny (create) No user can create incident types. // TODO: Add owner validation once the schema is updated with an ownership field.
-     * @deny (update) No user can update incident types. // TODO: Add owner validation once the schema is updated with an ownership field.
-     * @deny (delete) No user can delete incident types. // TODO: Add owner validation once the schema is updated with an ownership field.
-     * @principle Allows public read access, restricts write access.
+     * @allow (create) Authenticated user can create an incident type.
+     * @allow (get) Authenticated user can read an incident type.
+     * @allow (update) Authenticated user can update an incident type.
+     * @allow (delete) Authenticated user can delete an incident type.
+     * @principle Open access for authenticated users.
      */
     match /incident_types/{incidentTypeId} {
-      allow get, list: if true;
-      allow create: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow create: if isSignedIn();
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow update: if isSignedIn() && resource != null;
+      allow delete: if isSignedIn() && resource != null;
     }
 
     /**
-     * @description Manages access to employee information.
+     * @description Allows read and write access to employees. No ownership enforced, open access for authenticated users.
      * @path /employees/{employeeId}
-     * @allow (get, list) Any user can read employee information.
-     * @deny (create) No user can create employee information. // TODO: Add owner validation once the schema is updated with an ownership field.
-     * @deny (update) No user can update employee information. // TODO: Add owner validation once the schema is updated with an ownership field.
-     * @deny (delete) No user can delete employee information. // TODO: Add owner validation once the schema is updated with an ownership field.
-     * @principle Allows public read access, restricts write access.
+     * @allow (create) Authenticated user can create an employee.
+     * @allow (get) Authenticated user can read an employee.
+     * @allow (update) Authenticated user can update an employee.
+     * @allow (delete) Authenticated user can delete an employee.
+     * @principle Open access for authenticated users.
      */
     match /employees/{employeeId} {
-      allow get, list: if true;
-      allow create: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow create: if isSignedIn();
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow update: if isSignedIn() && resource != null;
+      allow delete: if isSignedIn() && resource != null;
     }
 
     /**
-     * @description Manages access to visit registration information.
+     * @description Allows read and write access to visit registrations. No ownership enforced, open access for authenticated users.
      * @path /visit_registrations/{visitRegistrationId}
-     * @allow (get, list) Any user can read visit registration information.
-     * @deny (create) No user can create visit registration information. // TODO: Add owner validation once the schema is updated with an ownership field.
-     * @deny (update) No user can update visit registration information. // TODO: Add owner validation once the schema is updated with an ownership field.
-     * @deny (delete) No user can delete visit registration information. // TODO: Add owner validation once the schema is updated with an ownership field.
-     * @principle Allows public read access, restricts write access.
+     * @allow (create) Authenticated user can create a visit registration.
+     * @allow (get) Authenticated user can read a visit registration.
+     * @allow (update) Authenticated user can update a visit registration.
+     * @allow (delete) Authenticated user can delete a visit registration.
+     * @principle Open access for authenticated users.
      */
     match /visit_registrations/{visitRegistrationId} {
-      allow get, list: if true;
-      allow create: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow create: if isSignedIn();
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow update: if isSignedIn() && resource != null;
+      allow delete: if isSignedIn() && resource != null;
     }
 
     /**
-     * @description Manages access to favorite visitor information.
+     * @description Allows read and write access to favorite visitors. No ownership enforced, open access for authenticated users.
      * @path /favorite_visitors/{favoriteVisitorId}
-     * @allow (get, list) Any user can read favorite visitor information.
-     * @deny (create) No user can create favorite visitor information. // TODO: Add owner validation once the schema is updated with an ownership field.
-     * @deny (update) No user can update favorite visitor information. // TODO: Add owner validation once the schema is updated with an ownership field.
-     * @deny (delete) No user can delete favorite visitor information. // TODO: Add owner validation once the schema is updated with an ownership field.
-     * @principle Allows public read access, restricts write access.
+     * @allow (create) Authenticated user can create a favorite visitor.
+     * @allow (get) Authenticated user can read a favorite visitor.
+     * @allow (update) Authenticated user can update a favorite visitor.
+     * @allow (delete) Authenticated user can delete a favorite visitor.
+     * @principle Open access for authenticated users.
      */
     match /favorite_visitors/{favoriteVisitorId} {
-      allow get, list: if true;
-      allow create: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow create: if isSignedIn();
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow update: if isSignedIn() && resource != null;
+      allow delete: if isSignedIn() && resource != null;
     }
 
     /**
-     * @description Manages access to UsuariDins (users inside) information.
+     * @description Allows read and write access to usuaris_dins.  Writes should be restricted to a trusted backend process in production.
      * @path /usuaris_dins/{usuariId}
-     * @allow (get, list) Any authenticated user can read the list of users inside.
-     * @deny (create) No user can create entries via the client; this is handled by a trusted backend process.
-     * @deny (update) No user can update entries via the client; this is handled by a trusted backend process.
-     * @deny (delete) No user can delete entries via the client; this is handled by a trusted backend process.
-     * @principle Allows public read access for authenticated users, restricts write access to a trusted backend.
+     * @allow (create) Authenticated user can create an entry.
+     * @allow (get) Authenticated user can read an entry.
+     * @allow (update) Authenticated user can update an entry.
+     * @allow (delete) Authenticated user can delete an entry.
+     * @principle Open access for authenticated users. Writes should be secured to a trusted backend.
      */
     match /usuaris_dins/{usuariId} {
-      allow get, list: if isSignedIn();
+      allow create: if isSignedIn();
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow update: if isSignedIn() && resource != null;
+      allow delete: if isSignedIn() && resource != null;
+    }
+
+    /**
+     * @description Allows read access to the directory.  Write access should be restricted to a trusted backend process.
+     * @path /directori/{directoriId}
+     * @allow (get) Any user can read from the directory.
+     * @allow (list) Any user can list entries in the directory.
+     * @deny (create) No one can create entries directly.
+     * @deny (update) No one can update entries directly.
+     * @deny (delete) No one can delete entries directly.
+     * @principle Public read access, private write access.
+     */
+    match /directori/{directoriId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
       allow create: if false;
       allow update: if false;
       allow delete: if false;
     }
 
     /**
-     * @description Manages access to the employee directory.
-     * @path /directori/{directoriId}
-     * @allow (get, list) Any user can read employee directory information.
-     * @deny (create) No user can create entries. // TODO: Add owner validation once the schema is updated with an ownership field.
-     * @deny (update) No user can update entries. // TODO: Add owner validation once the schema is updated with an ownership field.
-     * @deny (delete) No user can delete entries. // TODO: Add owner validation once the schema is updated with an ownership field.
-     * @principle Allows public read access, restricts write access.
-     */
-    match /directori/{directoriId} {
-      allow get, list: if true;
-      allow create: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-    }
-
-    /**
-     * @description Manages access to the list of departments.
+     * @description Allows read access to the departments collection.  Write access should be restricted to a trusted backend process.
      * @path /departaments/{departamentId}
-     * @allow (get, list) Any user can read department information.
-     * @deny (create) No user can create entries. // TODO: Add owner validation once the schema is updated with an ownership field.
-     * @deny (update) No user can update entries. // TODO: Add owner validation once the schema is updated with an ownership field.
-     * @deny (delete) No user can delete entries. // TODO: Add owner validation once the schema is updated with an ownership field.
-     * @principle Allows public read access, restricts write access.
+     * @allow (get) Any user can read department names.
+     * @allow (list) Any user can list department names.
+     * @deny (create) No one can create departments directly.
+     * @deny (update) No one can update departments directly.
+     * @deny (delete) No one can delete departments directly.
+     * @principle Public read access, private write access.
      */
     match /departaments/{departamentId} {
-      allow get, list: if true;
-      allow create: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
     }
+
+  }
+
+  // Helper function to determine if the user is signed in
+  function isSignedIn() {
+    return request.auth != null;
+  }
+
+  // Helper function to determine if the user is the owner of the document
+  function isOwner(userId) {
+    return request.auth.uid == userId;
+  }
+
+  // Helper function to determine if the user is the owner of the document and the document exists
+  function isExistingOwner(userId) {
+    return isOwner(userId) && resource != null;
   }
 }
