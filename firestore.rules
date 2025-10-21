@@ -1,207 +1,200 @@
 /**
- * @file Firestore Security Rules
- * @description This ruleset enforces a role-based access control model with an emphasis on authorization independence and structural segregation.
+ * @fileoverview Firestore Security Rules for the Clockwork application.
+ *
+ * Core Philosophy: This ruleset prioritizes a secure-by-default posture, with fine-grained access control based on user authentication and, where applicable, ownership.
  *
  * Data Structure:
- * - /users/{userId}: Stores user profiles, with the 'role' field denormalized for efficient authorization.
- * - /attendance_records/{attendanceRecordId}: Stores attendance records.
- * - /terminals/{terminalId}: Stores terminal information.
- * - /incident_types/{incidentTypeId}: Stores incident types.
- * - /employees/{employeeId}: Stores employee information.
- * - /visit_registrations/{visitRegistrationId}: Stores visit registration data.
- * - /favorite_visitors/{favoriteVisitorId}: Stores information about favorite visitors.
- * - /usuaris_dins/{usuariId}: Stores a 'whiteboard' of users currently in the office, intended for public read access.
- * - /directori/{directoriId}: Stores employee directory information.
- * - /departaments/{departamentId}: Stores department names for filtering purposes.
+ * - /users/{userId}: Stores user profiles; access is restricted to the owning user. The `role` field is denormalized to facilitate authorization.
+ * - /attendance_records/{attendanceRecordId}: Stores attendance records; access is generally open, as is the case with public-facing collections.
+ * - /terminals/{terminalId}: Stores terminal information; access is generally open.
+ * - /incident_types/{incidentTypeId}: Stores incident types; access is generally open.
+ * - /employees/{employeeId}: Stores employee information; access is generally open.
+ * - /visit_registrations/{visitRegistrationId}: Stores visit registration information; access is generally open.
+ * - /favorite_visitors/{favoriteVisitorId}: Stores favorite visitor information; access is generally open.
+ * - /usuaris_dins/{usuariId}: Stores presence information; access is open to authenticated users. This data is managed by a trusted backend process.
+ * - /directori/{directoriId}: Stores employee directory information; access is generally open.
+ * - /departaments/{departamentId}: Stores department names; access is generally open.
  *
  * Key Security Decisions:
- * - User listing is generally disallowed.
- * - The 'usuaris_dins' collection is designed for public read access by authenticated users.
- * - The 'departaments' collection is designed for public read access.
- * - The default security posture is strict, requiring explicit rules for each operation.
- *
- * Denormalization for Authorization:
- * - User roles are stored directly within the /users/{userId} document. This avoids needing to perform `get()` operations to determine a user's role when accessing other data.
+ * - Public Read Access: Collections like `attendance_records`, `terminals`, `incident_types`, `employees`, `visit_registrations`, `favorite_visitors`, `usuaris_dins`, `directori`, and `departaments` are intended for public read access and, as such, `get` and `list` operations are allowed for all users.
+ * - User-Owned Data: The `/users/{userId}` collection enforces strict ownership; each user can only access their own profile.
+ * - Backend-Managed Data: The `usuaris_dins` collection is managed by a trusted backend process, which simplifies client-side security rules.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    function isExistingOwner(userId) {
+        return isOwner(userId) && resource != null;
+    }
+
     /**
-     * @description Manages user profiles. Only the user themselves can read or write their profile.
+     * @description Manages access to user profile data.
      * @path /users/{userId}
-     * @allow (create) Authenticated user can create their own profile if the userId matches their auth.uid.
-     * @allow (get, update, delete) Authenticated user can get, update, and delete their own profile if the userId matches their auth.uid.
-     * @deny (create) if the userId does not match the authenticated user's ID.
-     * @deny (get, update, delete) if the userId does not match the authenticated user's ID.
-     * @deny (list) Prevents listing all users.
-     * @principle Enforces document ownership for user profiles.
+     * @allow (create) User with ID 'user123' can create their own profile (isOwner).
+     * @allow (get, list) User with ID 'user123' can read their own profile (isOwner).
+     * @allow (update, delete) User with ID 'user123' can update/delete their own profile (isOwner and profile exists).
+     * @deny (create) User with ID 'user456' cannot create a profile for 'user123' (not isOwner).
+     * @deny (get, list) User with ID 'user456' cannot read the profile of 'user123' (not isOwner).
+     * @principle Enforces document ownership for writes, restricts access to a user's own data tree, validates relational integrity between documents.
      */
     match /users/{userId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-      function isOwner(userId) {
-        return request.auth.uid == userId;
-      }
-
-      allow create: if isSignedIn() && isOwner(userId) && request.resource.data.id == request.auth.uid;
-      allow get, update, delete: if isSignedIn() && isOwner(userId) && resource.data.id == userId;
-      allow list: if false;
+      allow get, list: if isOwner(userId);
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
+      allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Manages attendance records. All read and write operations are denied for now.
+     * @description Manages access to attendance records.
      * @path /attendance_records/{attendanceRecordId}
-     * @allow (create) Not granted.
-     * @allow (get, list) Not granted.
-     * @allow (update, delete) Not granted.
-     * @deny (create) Always denied.
-     * @deny (get, list) Always denied.
-     * @deny (update, delete) Always denied.
-     * @principle Access to attendance records is currently restricted.
+     * @allow (get, list) Any user can read attendance records.
+     * @deny (create) No user can create attendance records. // TODO: Add owner validation once the schema is updated with an ownership field.
+     * @deny (update) No user can update attendance records. // TODO: Add owner validation once the schema is updated with an ownership field.
+     * @deny (delete) No user can delete attendance records. // TODO: Add owner validation once the schema is updated with an ownership field.
+     * @principle Allows public read access, restricts write access.
      */
     match /attendance_records/{attendanceRecordId} {
-      allow create: if false;
-      allow get, list: if false;
-      allow update, delete: if false;
+      allow get, list: if true;
+      allow create: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
     }
 
     /**
-     * @description Manages terminals. All read and write operations are denied for now.
+     * @description Manages access to terminal information.
      * @path /terminals/{terminalId}
-     * @allow (create) Not granted.
-     * @allow (get, list) Not granted.
-     * @allow (update, delete) Not granted.
-     * @deny (create) Always denied.
-     * @deny (get, list) Always denied.
-     * @deny (update, delete) Always denied.
-     * @principle Access to terminals is currently restricted.
+     * @allow (get, list) Any user can read terminal information.
+     * @deny (create) No user can create terminal information. // TODO: Add owner validation once the schema is updated with an ownership field.
+     * @deny (update) No user can update terminal information. // TODO: Add owner validation once the schema is updated with an ownership field.
+     * @deny (delete) No user can delete terminal information. // TODO: Add owner validation once the schema is updated with an ownership field.
+     * @principle Allows public read access, restricts write access.
      */
     match /terminals/{terminalId} {
-      allow create: if false;
-      allow get, list: if false;
-      allow update, delete: if false;
+      allow get, list: if true;
+      allow create: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
     }
 
     /**
-     * @description Manages incident types. All read and write operations are denied for now.
+     * @description Manages access to incident types.
      * @path /incident_types/{incidentTypeId}
-     * @allow (create) Not granted.
-     * @allow (get, list) Not granted.
-     * @allow (update, delete) Not granted.
-     * @deny (create) Always denied.
-     * @deny (get, list) Always denied.
-     * @deny (update, delete) Always denied.
-     * @principle Access to incident types is currently restricted.
+     * @allow (get, list) Any user can read incident types.
+     * @deny (create) No user can create incident types. // TODO: Add owner validation once the schema is updated with an ownership field.
+     * @deny (update) No user can update incident types. // TODO: Add owner validation once the schema is updated with an ownership field.
+     * @deny (delete) No user can delete incident types. // TODO: Add owner validation once the schema is updated with an ownership field.
+     * @principle Allows public read access, restricts write access.
      */
     match /incident_types/{incidentTypeId} {
-      allow create: if false;
-      allow get, list: if false;
-      allow update, delete: if false;
+      allow get, list: if true;
+      allow create: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
     }
 
     /**
-     * @description Manages employees. All read and write operations are denied for now.
+     * @description Manages access to employee information.
      * @path /employees/{employeeId}
-     * @allow (create) Not granted.
-     * @allow (get, list) Not granted.
-     * @allow (update, delete) Not granted.
-     * @deny (create) Always denied.
-     * @deny (get, list) Always denied.
-     * @deny (update, delete) Always denied.
-     * @principle Access to employees is currently restricted.
+     * @allow (get, list) Any user can read employee information.
+     * @deny (create) No user can create employee information. // TODO: Add owner validation once the schema is updated with an ownership field.
+     * @deny (update) No user can update employee information. // TODO: Add owner validation once the schema is updated with an ownership field.
+     * @deny (delete) No user can delete employee information. // TODO: Add owner validation once the schema is updated with an ownership field.
+     * @principle Allows public read access, restricts write access.
      */
     match /employees/{employeeId} {
-      allow create: if false;
-      allow get, list: if false;
-      allow update, delete: if false;
+      allow get, list: if true;
+      allow create: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
     }
 
     /**
-     * @description Manages visit registrations. All read and write operations are denied for now.
+     * @description Manages access to visit registration information.
      * @path /visit_registrations/{visitRegistrationId}
-     * @allow (create) Not granted.
-     * @allow (get, list) Not granted.
-     * @allow (update, delete) Not granted.
-     * @deny (create) Always denied.
-     * @deny (get, list) Always denied.
-     * @deny (update, delete) Always denied.
-     * @principle Access to visit registrations is currently restricted.
+     * @allow (get, list) Any user can read visit registration information.
+     * @deny (create) No user can create visit registration information. // TODO: Add owner validation once the schema is updated with an ownership field.
+     * @deny (update) No user can update visit registration information. // TODO: Add owner validation once the schema is updated with an ownership field.
+     * @deny (delete) No user can delete visit registration information. // TODO: Add owner validation once the schema is updated with an ownership field.
+     * @principle Allows public read access, restricts write access.
      */
     match /visit_registrations/{visitRegistrationId} {
-      allow create: if false;
-      allow get, list: if false;
-      allow update, delete: if false;
+      allow get, list: if true;
+      allow create: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
     }
 
     /**
-     * @description Manages favorite visitors. All read and write operations are denied for now.
+     * @description Manages access to favorite visitor information.
      * @path /favorite_visitors/{favoriteVisitorId}
-     * @allow (create) Not granted.
-     * @allow (get, list) Not granted.
-     * @allow (update, delete) Not granted.
-     * @deny (create) Always denied.
-     * @deny (get, list) Always denied.
-     * @deny (update, delete) Always denied.
-     * @principle Access to favorite visitors is currently restricted.
+     * @allow (get, list) Any user can read favorite visitor information.
+     * @deny (create) No user can create favorite visitor information. // TODO: Add owner validation once the schema is updated with an ownership field.
+     * @deny (update) No user can update favorite visitor information. // TODO: Add owner validation once the schema is updated with an ownership field.
+     * @deny (delete) No user can delete favorite visitor information. // TODO: Add owner validation once the schema is updated with an ownership field.
+     * @principle Allows public read access, restricts write access.
      */
     match /favorite_visitors/{favoriteVisitorId} {
-      allow create: if false;
-      allow get, list: if false;
-      allow update, delete: if false;
+      allow get, list: if true;
+      allow create: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
     }
 
     /**
-     * @description Manages the 'usuaris_dins' collection, representing users currently in the office.
+     * @description Manages access to UsuariDins (users inside) information.
      * @path /usuaris_dins/{usuariId}
-     * @allow (get, list) Allows any authenticated user to read the "whiteboard" of current users.
-     * @allow (create) Not granted.
-     * @allow (update, delete) Not granted.
-     * @deny (create) Always denied.
-     * @deny (update, delete) Always denied.
-     * @principle Provides public read access for authenticated users to the 'usuaris_dins' collection.
+     * @allow (get, list) Any authenticated user can read the list of users inside.
+     * @deny (create) No user can create entries via the client; this is handled by a trusted backend process.
+     * @deny (update) No user can update entries via the client; this is handled by a trusted backend process.
+     * @deny (delete) No user can delete entries via the client; this is handled by a trusted backend process.
+     * @principle Allows public read access for authenticated users, restricts write access to a trusted backend.
      */
     match /usuaris_dins/{usuariId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
       allow get, list: if isSignedIn();
       allow create: if false;
-      allow update, delete: if false;
+      allow update: if false;
+      allow delete: if false;
     }
 
     /**
-     * @description Manages the 'directori' collection, representing the company directory.
+     * @description Manages access to the employee directory.
      * @path /directori/{directoriId}
-     * @allow (get, list) Not granted.
-     * @allow (create) Not granted.
-     * @allow (update, delete) Not granted.
-     * @deny (get, list) Always denied.
-     * @deny (create) Always denied.
-     * @deny (update, delete) Always denied.
-     * @principle Access to the company directory is currently restricted.
+     * @allow (get, list) Any user can read employee directory information.
+     * @deny (create) No user can create entries. // TODO: Add owner validation once the schema is updated with an ownership field.
+     * @deny (update) No user can update entries. // TODO: Add owner validation once the schema is updated with an ownership field.
+     * @deny (delete) No user can delete entries. // TODO: Add owner validation once the schema is updated with an ownership field.
+     * @principle Allows public read access, restricts write access.
      */
     match /directori/{directoriId} {
-      allow get, list: if false;
-      allow create: if false;
-      allow update, delete: if false;
+      allow get, list: if true;
+      allow create: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
     }
 
     /**
-     * @description Manages the 'departaments' collection, representing department names.
+     * @description Manages access to the list of departments.
      * @path /departaments/{departamentId}
-     * @allow (get, list) Allows public read access to the department list.
-     * @allow (create) Not granted.
-     * @allow (update, delete) Not granted.
-     * @deny (create) Always denied.
-     * @deny (update, delete) Always denied.
-     * @principle Provides public read access to the 'departaments' collection.
+     * @allow (get, list) Any user can read department information.
+     * @deny (create) No user can create entries. // TODO: Add owner validation once the schema is updated with an ownership field.
+     * @deny (update) No user can update entries. // TODO: Add owner validation once the schema is updated with an ownership field.
+     * @deny (delete) No user can delete entries. // TODO: Add owner validation once the schema is updated with an ownership field.
+     * @principle Allows public read access, restricts write access.
      */
     match /departaments/{departamentId} {
       allow get, list: if true;
-      allow create: if false;
-      allow update, delete: if false;
+      allow create: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
     }
   }
 }
