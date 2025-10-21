@@ -22,7 +22,7 @@ import {
   deleteDocumentNonBlocking,
 } from '@/firebase';
 import type { VisitRegistration, UsuariDins, Directori } from '@/lib/types';
-import { collection, query, where, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, doc, getDocs } from 'firebase/firestore';
 import { Contact, Users, User, Loader2, LogOut } from 'lucide-react';
 import {
   Accordion,
@@ -31,7 +31,7 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion';
 import { Button } from '../ui/button';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import {
   Tooltip,
   TooltipContent,
@@ -44,7 +44,6 @@ export default function PresentPeopleList() {
   const [presentVisitors, setPresentVisitors] = useState<VisitRegistration[]>(
     []
   );
-  const [detailedStaff, setDetailedStaff] = useState<Directori[]>([]);
 
   // Col·leccions de Firestore
   const usuarisDinsCollection = useMemoFirebase(
@@ -62,10 +61,37 @@ export default function PresentPeopleList() {
   }, [firestore]);
 
   // Obtenció de dades
-  const { data: presentStaff, isLoading: staffLoading } =
+  const { data: presentStaffRaw, isLoading: staffLoading } =
     useCollection<UsuariDins>(usuarisDinsCollection);
   const { data: visitors, isLoading: visitorsLoading } =
     useCollection<VisitRegistration>(visitorsCollection);
+
+  const presentStaffIds = useMemo(() => {
+    return presentStaffRaw?.map(staff => staff.id) ?? [];
+  }, [presentStaffRaw]);
+  
+  const staffDetailsQuery = useMemoFirebase(() => {
+    if (!firestore || presentStaffIds.length === 0) return null;
+    return query(collection(firestore, 'directori'), where('centreCost', 'in', presentStaffIds));
+  }, [firestore, presentStaffIds]);
+
+  const { data: detailedStaff, isLoading: staffDetailsLoading } = useCollection<Directori>(staffDetailsQuery);
+
+  const enrichedStaff = useMemo(() => {
+    if (!presentStaffRaw || !detailedStaff) return [];
+    
+    const staffMap = new Map(detailedStaff.map(s => [s.centreCost, s]));
+    
+    return presentStaffRaw.map(present => {
+      const details = staffMap.get(present.id);
+      return {
+        ...present,
+        nom: details?.nom ?? present.nom,
+        cognom: details?.cognom ?? present.cognoms,
+      };
+    });
+  }, [presentStaffRaw, detailedStaff]);
+
 
   // Actualitza les visites presents quan canvien les dades
   useEffect(() => {
@@ -73,24 +99,6 @@ export default function PresentPeopleList() {
       setPresentVisitors(visitors);
     }
   }, [visitors]);
-
-  // Fetch full staff details when presentStaff changes
-  useEffect(() => {
-    if (presentStaff && firestore) {
-      const fetchStaffDetails = async () => {
-        const staffDetailsPromises = presentStaff.map(staffMember => {
-          const staffDocRef = doc(firestore, 'directori', staffMember.id);
-          return getDoc(staffDocRef);
-        });
-        const staffDocs = await Promise.all(staffDetailsPromises);
-        const detailedStaffData = staffDocs
-          .map(docSnap => (docSnap.exists() ? ({ id: docSnap.id, ...docSnap.data() } as Directori) : null))
-          .filter((p): p is Directori => p !== null);
-        setDetailedStaff(detailedStaffData);
-      };
-      fetchStaffDetails();
-    }
-  }, [presentStaff, firestore]);
 
   const handleVisitorCheckout = (visitorId: string) => {
     if (firestore && visitorId) {
@@ -107,8 +115,8 @@ export default function PresentPeopleList() {
   };
 
 
-  const isLoading = staffLoading || visitorsLoading;
-  const totalPresent = (detailedStaff?.length || 0) + presentVisitors.length;
+  const isLoading = staffLoading || visitorsLoading || staffDetailsLoading;
+  const totalPresent = (enrichedStaff?.length || 0) + presentVisitors.length;
 
   const getFormattedTime = (timestamp: any) => {
     if (timestamp && typeof timestamp.toDate === 'function') {
@@ -206,11 +214,11 @@ export default function PresentPeopleList() {
                 <AccordionTrigger className="text-base font-medium">
                   <div className="flex items-center gap-2">
                     <User className="h-5 w-5" />
-                    <span>Empleats ({detailedStaff?.length || 0})</span>
+                    <span>Empleats ({enrichedStaff?.length || 0})</span>
                   </div>
                 </AccordionTrigger>
                 <AccordionContent>
-                  {detailedStaff && detailedStaff.length > 0 ? (
+                  {enrichedStaff && enrichedStaff.length > 0 ? (
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -220,7 +228,7 @@ export default function PresentPeopleList() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {detailedStaff.map((employee) => (
+                        {enrichedStaff.map((employee) => (
                           <TableRow key={`emp-${employee.id}`} className="text-sm">
                             <TableCell className="font-medium py-2 px-3">
                               {employee.cognom}

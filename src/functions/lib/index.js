@@ -234,12 +234,17 @@ exports.sincronitzarPersonalPresent = functions
                 console.warn("TRACE: Ometent fitxatge sense data o amb format invàlid:", fitxatge);
                 continue;
             }
-            const employeeId = fitxatge.P_CI;
-            if (!employeeId || typeof employeeId !== 'string') {
-                console.warn("TRACE: Ometent fitxatge sense P_CI o amb format invàlid:", fitxatge);
+            let employeeId = fitxatge.P_CI;
+            if (employeeId === null || employeeId === undefined) {
+                console.warn("TRACE: Ometent fitxatge sense P_CI:", fitxatge);
                 continue;
             }
-            const parts = dateStr.split(/[\s/:]+/); // MM, DD, YYYY, HH, mm, ss
+            employeeId = String(employeeId).trim();
+            if (employeeId.length === 0) {
+                console.warn("TRACE: Ometent fitxatge amb P_CI buit:", fitxatge);
+                continue;
+            }
+            const parts = dateStr.split(/[\s/:]+/);
             if (parts.length < 6) {
                 console.warn("TRACE: Ometent fitxatge amb data en format inesperat:", fitxatge);
                 continue;
@@ -255,7 +260,7 @@ exports.sincronitzarPersonalPresent = functions
         const presentUsers = {};
         for (const employeeId in userPunches) {
             const punches = userPunches[employeeId];
-            if (punches.length % 2 !== 0) { // Nombre senar de fitxatges = DINS
+            if (punches.length % 2 !== 0) {
                 punches.sort((a, b) => b.parsedDate - a.parsedDate);
                 const lastPunch = punches[0];
                 presentUsers[employeeId] = {
@@ -272,21 +277,26 @@ exports.sincronitzarPersonalPresent = functions
             const usuarisDinsFirestoreIds = usuarisDinsFirestoreSnapshot.docs.map(doc => doc.id);
             console.log("TRACE: Obtenint dades del directori per als usuaris presents...");
             const directoriUsersMap = new Map();
-            // Dividir presentUserIds en trossos de 30
             const chunkSize = 30;
             for (let i = 0; i < presentUserIds.length; i += chunkSize) {
                 const chunk = presentUserIds.slice(i, i + chunkSize);
-                console.log(`TRACE: Processant tros ${i / chunkSize + 1} del directori amb ${chunk.length} usuaris.`);
-                const directoriQuerySnapshot = await db.collection('directori').where(firestore_1.FieldPath.documentId(), 'in', chunk).get();
-                directoriQuerySnapshot.forEach(doc => {
-                    const data = doc.data();
-                    directoriUsersMap.set(doc.id, {
-                        nom: data.nom || '',
-                        cognom: data.cognom || ''
+                console.log(`TRACE: Processant tros ${Math.floor(i / chunkSize) + 1} del directori amb ${chunk.length} usuaris.`);
+                if (chunk.length > 0) {
+                    const directoriQuerySnapshot = await db.collection('directori').where('centreCost', 'in', chunk).get();
+                    directoriQuerySnapshot.forEach(doc => {
+                        const data = doc.data();
+                        if (data.centreCost) {
+                            const key = String(data.centreCost).trim();
+                            directoriUsersMap.set(key, {
+                                nom: data.nom || '',
+                                cognom: data.cognom || ''
+                            });
+                        }
                     });
-                });
+                }
             }
             console.log(`TRACE: S'han trobat ${directoriUsersMap.size} usuaris al directori.`);
+            console.log("TRACE: Claus carregades al directoriUsersMap:", Array.from(directoriUsersMap.keys()));
             const presentUserIdsSet = new Set(presentUserIds);
             const usuarisPerEliminar = usuarisDinsFirestoreIds.filter(id => !presentUserIdsSet.has(id));
             console.log(`TRACE: Usuaris a eliminar de 'usuaris_dins': ${usuarisPerEliminar.length}. IDs:`, usuarisPerEliminar);
@@ -295,7 +305,7 @@ exports.sincronitzarPersonalPresent = functions
             for (const userId of presentUserIds) {
                 const userInfo = directoriUsersMap.get(userId);
                 if (!userInfo) {
-                    console.warn(`WARN: No s'ha trobat l'usuari amb P_CI (ID) '${userId}' al directori. S'utilitzarà 'N/A'.`);
+                    console.warn(`WARN: No s'ha trobat l'usuari amb P_CI (centreCost) '${userId}' al directori. S'utilitzarà 'N/A'.`);
                 }
                 const docRef = db.collection('usuaris_dins').doc(userId);
                 const dataToSet = Object.assign(Object.assign({}, presentUsers[userId]), { nom: (userInfo === null || userInfo === void 0 ? void 0 : userInfo.nom) || 'N/A', cognom: (userInfo === null || userInfo === void 0 ? void 0 : userInfo.cognom) || 'N/A' });
