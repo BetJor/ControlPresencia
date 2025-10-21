@@ -156,9 +156,9 @@ exports.importarUsuarisAGoogleWorkspace = functions
   });
 
 
-exports.getDadesAppSheet = onCall({ region: "europe-west1", memory: "1GiB", timeoutSeconds: 60 }, async (request) => {
+exports.getDadesAppSheet = onCall({ region: "europe-west1", memory: "1GiB", timeoutSeconds: 60, secrets: ["APPSHEET_APP_ACCESS_KEY"] }, async (request) => {
   const APP_ID = "94c06d4b-4ed0-49d4-85a9-003710c7038b";
-  const APP_ACCESS_KEY = "V2-LINid-jygnH-4Eqx6-xEe13-kXpTW-ZALoX-yY7yc-q9EMj"; 
+  const APP_ACCESS_KEY = process.env.APPSHEET_APP_ACCESS_KEY;
 
   const url = `https://api.appsheet.com/api/v2/apps/${APP_ID}/tables/dbo.Google_EntradasSalidas/Action`;
 
@@ -172,7 +172,7 @@ exports.getDadesAppSheet = onCall({ region: "europe-west1", memory: "1GiB", time
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'ApplicationAccessKey': APP_ACCESS_KEY
+      'ApplicationAccessKey': APP_ACCESS_KEY!
     },
     body: body
   });
@@ -189,15 +189,15 @@ exports.getDadesAppSheet = onCall({ region: "europe-west1", memory: "1GiB", time
 
 
 exports.sincronitzarPersonalPresent = functions
-  .runWith({secrets: ["APP_ACCESS_KEY"]})
   .region('europe-west1')
+  .runWith({ secrets: ["APPSHEET_APP_ACCESS_KEY"] })
   .pubsub.schedule('every 5 minutes')
   .timeZone('Europe/Madrid')
   .onRun(async (context) => {
     console.log("TRACE: Iniciant la sincronització de personal present.");
 
     const APP_ID = "94c06d4b-4ed0-49d4-85a9-003710c7038b";
-    const APP_ACCESS_KEY = process.env.APP_ACCESS_KEY;
+    const APP_ACCESS_KEY = process.env.APPSHEET_APP_ACCESS_KEY;
     const db = getFirestore();
 
     try {
@@ -222,8 +222,14 @@ exports.sincronitzarPersonalPresent = functions
       today.setHours(0, 0, 0, 0);
 
       const userPunches: { [key: string]: any[] } = {};
+      const terminalsValids = ['10', '11', '12', '13'];
 
       for (const fitxatge of fitxatges) {
+        const terminalId = String(fitxatge['Id Terminal']);
+        if (!terminalsValids.includes(terminalId)) {
+          continue; // Ignora el fitxatge si no és d'una terminal vàlida
+        }
+
         const dateStr = fitxatge['Fecha y Hora'] || fitxatge['Data'];
         let employeeId = fitxatge.Identificador;
 
@@ -235,6 +241,7 @@ exports.sincronitzarPersonalPresent = functions
         const parts = dateStr.split(/[\s/:]+/);
         if(parts.length < 6) continue;
 
+        // The time is parsed as local time because the function has timeZone('Europe/Madrid')
         const date = new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]), parseInt(parts[3]), parseInt(parts[4]), parseInt(parts[5]));
 
         if (date >= today) {
@@ -311,3 +318,4 @@ exports.sincronitzarPersonalPresent = functions
       return null;
     }
   });
+

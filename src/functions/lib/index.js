@@ -198,6 +198,7 @@ exports.getDadesAppSheet = (0, https_1.onCall)({ region: "europe-west1", memory:
 exports.sincronitzarPersonalPresent = functions
     .region('europe-west1')
     .pubsub.schedule('every 5 minutes')
+    .timeZone('Europe/Madrid')
     .onRun(async (context) => {
     console.log("TRACE: Iniciant la sincronització de personal present.");
     const APP_ID = "94c06d4b-4ed0-49d4-85a9-003710c7038b";
@@ -244,7 +245,12 @@ exports.sincronitzarPersonalPresent = functions
             if (punches.length % 2 !== 0) {
                 punches.sort((a, b) => b.parsedDate.getTime() - a.parsedDate.getTime());
                 const lastPunch = punches[0];
-                presentUsers[employeeId] = { horaDarreraEntrada: firestore_1.Timestamp.fromDate(lastPunch.parsedDate) };
+                presentUsers[employeeId] = {
+                    horaDarreraEntrada: firestore_1.Timestamp.fromDate(lastPunch.parsedDate),
+                    nomOriginal: lastPunch.Nombre || '',
+                    cognomsOriginal: lastPunch.Apellidos || '',
+                    nombreMoviments: punches.length,
+                };
             }
         }
         const presentUserIds = Object.keys(presentUsers);
@@ -270,7 +276,12 @@ exports.sincronitzarPersonalPresent = functions
             }
             for (const userId of presentUserIds) {
                 const userInfo = directoriUsersMap.get(userId);
-                const dataToSet = Object.assign(Object.assign({}, presentUsers[userId]), { nom: (userInfo === null || userInfo === void 0 ? void 0 : userInfo.nom) || 'N/A', cognom: (userInfo === null || userInfo === void 0 ? void 0 : userInfo.cognom) || 'N/A' });
+                const dataToSet = {
+                    horaDarreraEntrada: presentUsers[userId].horaDarreraEntrada,
+                    nom: (userInfo === null || userInfo === void 0 ? void 0 : userInfo.nom) || presentUsers[userId].nomOriginal,
+                    cognoms: (userInfo === null || userInfo === void 0 ? void 0 : userInfo.cognom) || presentUsers[userId].cognomsOriginal,
+                    nombreMoviments: presentUsers[userId].nombreMoviments,
+                };
                 const docRef = usuarisDinsCollection.doc(userId);
                 batch.set(docRef, dataToSet, { merge: true });
                 usuarisDinsFirestoreIds.delete(userId);
