@@ -65,6 +65,11 @@ export default function DirectoryPage() {
         if (!searchTerm && !departmentFilter) {
             setEmployees([]);
             setHasSearched(false);
+             toast({
+                variant: "destructive",
+                title: "Error",
+                description: "Por favor, introduce un nombre o selecciona un departamento para buscar.",
+            });
             return;
         }
 
@@ -74,37 +79,59 @@ export default function DirectoryPage() {
         const baseCollection = collection(firestore, 'directori');
         let finalQuery;
 
-        if (searchTerm) {
+        // Prioritize department filter if both are present
+        if (departmentFilter) {
+             finalQuery = query(
+                baseCollection,
+                where('departament', '==', departmentFilter)
+            );
+        } else if (searchTerm) {
+            const searchTermLower = searchTerm.toLowerCase();
             const searchTermCapitalized = searchTerm.charAt(0).toUpperCase() + searchTerm.slice(1);
+            
+            // This OR query might require a composite index in Firestore.
+            // Firestore will provide a link in the console error to create it if needed.
             finalQuery = query(
-                baseCollection, 
+                baseCollection,
                 or(
+                    where('nom', '>=', searchTerm),
+                    where('nom', '>=', searchTermLower),
                     where('nom', '>=', searchTermCapitalized),
+                    where('cognom', '>=', searchTerm),
+                    where('cognom', '>=', searchTermLower),
                     where('cognom', '>=', searchTermCapitalized)
                 )
             );
-        } else if (departmentFilter) {
-            finalQuery = query(
-                baseCollection,
-                where('departament', '==', departmentFilter),
-                orderBy(sortConfig.key, sortConfig.direction)
-            );
+
         } else {
              setIsLoading(false);
              setEmployees([]);
              return;
         }
 
+
         try {
             const querySnapshot = await getDocs(finalQuery);
             let fetchedEmployees = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Directori);
 
+            // Client-side filtering because Firestore string searches are case-sensitive and prefix-based.
             if (searchTerm) {
                 const lowercasedSearch = searchTerm.toLowerCase();
                 fetchedEmployees = fetchedEmployees.filter(emp => 
-                    emp.nom.toLowerCase().startsWith(lowercasedSearch) || emp.cognom.toLowerCase().startsWith(lowercasedSearch)
+                    emp.nom.toLowerCase().startsWith(lowercasedSearch) || 
+                    emp.cognom.toLowerCase().startsWith(lowercasedSearch)
                 );
             }
+
+             if (departmentFilter && searchTerm) {
+                const lowercasedSearch = searchTerm.toLowerCase();
+                fetchedEmployees = fetchedEmployees.filter(emp =>
+                    emp.departament === departmentFilter &&
+                    (emp.nom.toLowerCase().startsWith(lowercasedSearch) ||
+                     emp.cognom.toLowerCase().startsWith(lowercasedSearch))
+                );
+            }
+
             
             const sorted = fetchedEmployees.sort((a,b) => {
                 const aVal = a[sortConfig.key] || '';
@@ -124,13 +151,11 @@ export default function DirectoryPage() {
 
     const handleSearchSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        setDepartmentFilter('');
         performSearch();
     };
 
     const handleDepartmentSelect = (depName: string) => {
-        const newFilter = depName === departmentFilter ? "" : depName;
-        setNameFilter('');
+        const newFilter = depName;
         setDepartmentFilter(newFilter);
         setDepartmentOpen(false);
         // Automatically search when a department is selected
@@ -171,18 +196,16 @@ export default function DirectoryPage() {
                 <CardDescription>Busca y contacta con los empleados de la organización.</CardDescription>
             </CardHeader>
             <CardContent>
+                <form onSubmit={handleSearchSubmit}>
                 <div className="flex flex-col md:flex-row items-center gap-4 mb-6">
                      <div className="relative w-full md:w-1/2 flex items-center gap-2">
-                        <form className="relative w-full" onSubmit={handleSearchSubmit}>
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                placeholder="Buscar por nombre o apellido..."
-                                value={nameFilter}
-                                onChange={(e) => setNameFilter(e.target.value)}
-                                className="pl-10"
-                            />
-                            <Button type="submit" className="sr-only">Buscar</Button>
-                        </form>
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Buscar por nombre o apellido..."
+                            value={nameFilter}
+                            onChange={(e) => setNameFilter(e.target.value)}
+                            className="pl-10"
+                        />
                     </div>
                      <div className="w-full md:w-1/2 flex items-center gap-2">
                         <Popover open={departmentOpen} onOpenChange={setDepartmentOpen}>
@@ -217,12 +240,7 @@ export default function DirectoryPage() {
                                                 <CommandItem
                                                     key={dep.id}
                                                     value={dep.name}
-                                                    onSelect={() => {
-                                                        setNameFilter(''); 
-                                                        setDepartmentFilter(dep.name);
-                                                        performSearch();
-                                                        setDepartmentOpen(false);
-                                                    }}
+                                                    onSelect={() => handleDepartmentSelect(dep.name) }
                                                 >
                                                     <Check className={cn("mr-2 h-4 w-4", departmentFilter === dep.name ? "opacity-100" : "opacity-0")} />
                                                     {dep.name}
@@ -235,15 +253,19 @@ export default function DirectoryPage() {
                         </Popover>
                     </div>
                 </div>
-                 {hasActiveFilter && (
-                    <div className="mb-4 text-right">
+                <div className="flex justify-between items-center mb-4">
+                     <Button type="submit" disabled={effectiveIsLoading}>
+                        <Search className="mr-2 h-4 w-4" />
+                        Buscar
+                    </Button>
+                    {hasActiveFilter && (
                         <Button variant="ghost" onClick={clearFilters}>
                             <XIcon className="h-4 w-4 mr-2" />
                             Limpiar filtros
                         </Button>
-                    </div>
-                )}
-
+                    )}
+                </div>
+                </form>
 
                 {effectiveIsLoading ? (
                     <div className="flex items-center justify-center py-8">
