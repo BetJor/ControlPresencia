@@ -241,7 +241,6 @@ exports.sincronitzarPersonalPresent = functions
         const parts = dateStr.split(/[\s/:]+/);
         if(parts.length < 6) continue;
 
-        // The time is parsed as local time because the function has timeZone('Europe/Madrid')
         const date = new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]), parseInt(parts[3]), parseInt(parts[4]), parseInt(parts[5]));
 
         if (date >= today) {
@@ -261,6 +260,7 @@ exports.sincronitzarPersonalPresent = functions
             nomOriginal: lastPunch.Nombre || '',
             cognomsOriginal: lastPunch.Apellidos || '',
             nombreMoviments: punches.length,
+            darrerTerminal: lastPunch['Id Terminal'] || '',
           };
         }
       }
@@ -297,6 +297,7 @@ exports.sincronitzarPersonalPresent = functions
                 nom: userInfo?.nom || presentUsers[userId].nomOriginal,
                 cognoms: userInfo?.cognom || presentUsers[userId].cognomsOriginal,
                 nombreMoviments: presentUsers[userId].nombreMoviments,
+                darrerTerminal: presentUsers[userId].darrerTerminal,
             };
             const docRef = usuarisDinsCollection.doc(userId);
             batch.set(docRef, dataToSet, { merge: true });
@@ -318,4 +319,3 @@ exports.sincronitzarPersonalPresent = functions
       return null;
     }
   });
-

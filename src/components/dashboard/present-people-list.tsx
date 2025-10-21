@@ -23,7 +23,7 @@ import {
 } from '@/firebase';
 import type { VisitRegistration, UsuariDins, Directori } from '@/lib/types';
 import { collection, query, where, doc } from 'firebase/firestore';
-import { Contact, Users, User, Loader2, LogOut, Repeat } from 'lucide-react';
+import { Contact, Users, User, Loader2, LogOut, Repeat, Terminal } from 'lucide-react';
 import {
   Accordion,
   AccordionContent,
@@ -67,10 +67,7 @@ export default function PresentPeopleList() {
   
   // 3. Create a memoized query to get details for ONLY the present staff
   const staffDetailsQuery = useMemoFirebase(() => {
-    // Return null if we don't have the IDs yet, to prevent running a query for `where in []` which is invalid.
     if (!firestore || presentStaffIds.length === 0) return null;
-    // Use 'in' query to fetch all matching documents in one go. Max 30 IDs per query.
-    // For more than 30, you'd need to split into multiple queries.
     return query(collection(firestore, 'directori'), where('centreCost', 'in', presentStaffIds.slice(0, 30)));
   }, [firestore, presentStaffIds]);
 
@@ -81,18 +78,16 @@ export default function PresentPeopleList() {
   const enrichedStaff = useMemo(() => {
     if (!presentStaffRaw || !detailedStaff) return [];
     
-    // Create a map for quick lookups, ensuring keys are trimmed.
     const staffMap = new Map(detailedStaff.map(s => [String(s.centreCost).trim(), s]));
     
     return presentStaffRaw.map(present => {
-      // Ensure the ID used for lookup is also trimmed.
       const details = staffMap.get(String(present.id).trim());
       return {
         ...present,
-        // Fallback to the data from `usuaris_dins` if no details are found in `directori`
         nom: details?.nom ?? present.nom,
         cognom: details?.cognom ?? present.cognoms ?? '',
         nombreMoviments: present.nombreMoviments || 0,
+        darrerTerminal: present.darrerTerminal || 'N/A',
       };
     }).sort((a, b) => {
         const timeA = a.horaDarreraEntrada?.toDate().getTime() || 0;
@@ -245,6 +240,17 @@ export default function PresentPeopleList() {
                               </TooltipContent>
                             </Tooltip>
                           </TableHead>
+                           <TableHead className="py-2 px-3 text-center">
+                            <Tooltip>
+                              <TooltipTrigger className='flex items-center gap-1'>
+                                <Terminal className="h-4 w-4" />
+                                <span>T.</span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Terminal darrer moviment</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TableHead>
                           <TableHead className="py-2 px-3">Darrera Entrada</TableHead>
                           <TableHead className="text-right py-2 px-3">Accions</TableHead>
                         </TableRow>
@@ -258,6 +264,7 @@ export default function PresentPeopleList() {
                             <TableCell className="py-2 px-3">{employee.nom}</TableCell>
                             <TableCell className="py-2 px-3">{employee.id}</TableCell>
                             <TableCell className="py-2 px-3 text-center">{employee.nombreMoviments}</TableCell>
+                            <TableCell className="py-2 px-3 text-center">{employee.darrerTerminal}</TableCell>
                             <TableCell className="py-2 px-3">{getFormattedDateTime(employee.horaDarreraEntrada)}</TableCell>
                              <TableCell className="text-right py-2 px-3">
                               <Tooltip>

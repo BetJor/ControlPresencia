@@ -56,6 +56,7 @@ export type UsuariDins = {
   cognoms: string;
   horaDarreraEntrada: Timestamp;
   nombreMoviments: number;
+  darrerTerminal: string;
 };
 
 export type Directori = {
