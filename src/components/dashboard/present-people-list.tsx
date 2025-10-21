@@ -90,9 +90,9 @@ export default function PresentPeopleList() {
         ...present,
         // Fallback to the data from `usuaris_dins` if no details are found in `directori`
         nom: details?.nom ?? present.nom,
-        cognom: details?.cognom ?? present.cognoms,
+        cognom: details?.cognom ?? present.cognoms ?? '',
       };
-    }).sort((a, b) => a.cognom.localeCompare(b.cognom));
+    }).sort((a, b) => (a.cognom || '').localeCompare(b.cognom || ''));
   }, [presentStaffRaw, detailedStaff]);
 
 
