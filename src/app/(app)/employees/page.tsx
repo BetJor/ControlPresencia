@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
-import { collection, query, where, orderBy } from "firebase/firestore";
+import { collection, query, where, orderBy, or } from "firebase/firestore";
 import { Loader2, BookUser, Mail, Phone, Search, ChevronsUpDown, Check, XIcon, ArrowUp, ArrowDown } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -30,7 +30,8 @@ export default function DirectoryPage() {
     const [departmentOpen, setDepartmentOpen] = useState(false);
     
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'nom', direction: 'asc' });
-    const [hasSearched, setHasSearched] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [isSearching, setIsSearching] = useState(false);
 
     const departmentsCollection = useMemoFirebase(() => {
         if (!firestore) return null;
@@ -47,87 +48,84 @@ export default function DirectoryPage() {
         });
     };
 
-    const nameSearchTerm = nameFilter.trim().toLowerCase();
-    
-    const nameFilterQuery = useMemoFirebase(() => {
-        if (!firestore || !nameSearchTerm) return null;
-        const searchTermCapitalized = nameSearchTerm.charAt(0).toUpperCase() + nameSearchTerm.slice(1);
-        return query(
-            collection(firestore, 'directori'), 
-            orderBy('nom'), 
-            where('nom', '>=', searchTermCapitalized), 
-            where('nom', '<=', searchTermCapitalized + '\uf8ff')
-        );
-    }, [firestore, nameSearchTerm]);
+    const employeeQuery = useMemoFirebase(() => {
+        if (!firestore || (!searchTerm && !departmentFilter)) return null;
+        setIsSearching(true);
+        const baseCollection = collection(firestore, 'directori');
 
-    const lastNameFilterQuery = useMemoFirebase(() => {
-        if (!firestore || !nameSearchTerm) return null;
-        const searchTermCapitalized = nameSearchTerm.charAt(0).toUpperCase() + nameSearchTerm.slice(1);
-        return query(
-            collection(firestore, 'directori'),
-            orderBy('cognom'),
-            where('cognom', '>=', searchTermCapitalized),
-            where('cognom', '<=', searchTermCapitalized + '\uf8ff')
-        );
-    }, [firestore, nameSearchTerm]);
-
-    const departmentQuery = useMemoFirebase(() => {
-        if (!firestore || !departmentFilter || nameSearchTerm) return null;
-        return query(
-            collection(firestore, 'directori'),
-            where('departament', '==', departmentFilter),
-            orderBy(sortConfig.key, sortConfig.direction)
-        );
-    }, [firestore, departmentFilter, nameSearchTerm, sortConfig]);
-
-    const { data: nameFilteredEmployees, isLoading: isLoadingName } = useCollection<Directori>(nameFilterQuery);
-    const { data: lastNameFilteredEmployees, isLoading: isLoadingLastName } = useCollection<Directori>(lastNameFilterQuery);
-    const { data: departmentFilteredEmployees, isLoading: isLoadingDeptResults } = useCollection<Directori>(departmentQuery);
-    
-    const employees = useMemo(() => {
-        if (nameSearchTerm) {
-            const resultsMap = new Map<string, Directori>();
-            nameFilteredEmployees?.forEach(doc => doc.id && resultsMap.set(doc.id, doc));
-            lastNameFilteredEmployees?.forEach(doc => doc.id && resultsMap.set(doc.id, doc));
-            const combined = Array.from(resultsMap.values());
-            
-            return combined.sort((a,b) => {
-                const aVal = a[sortConfig.key] || '';
-                const bVal = b[sortConfig.key] || '';
-                const comparison = String(aVal).localeCompare(String(bVal));
-                return sortConfig.direction === 'asc' ? comparison : -comparison;
-            });
+        if (searchTerm) {
+            const searchTermCapitalized = searchTerm.charAt(0).toUpperCase() + searchTerm.slice(1);
+            return query(
+                baseCollection, 
+                or(
+                    where('nom', '>=', searchTermCapitalized),
+                    where('cognom', '>=', searchTermCapitalized)
+                )
+            );
         }
+
         if (departmentFilter) {
-            return departmentFilteredEmployees ?? [];
+            return query(
+                baseCollection,
+                where('departament', '==', departmentFilter),
+                orderBy(sortConfig.key, sortConfig.direction)
+            );
         }
-        return [];
-    }, [nameSearchTerm, nameFilteredEmployees, lastNameFilteredEmployees, departmentFilter, departmentFilteredEmployees, sortConfig]);
+        
+        return null;
+
+    }, [firestore, searchTerm, departmentFilter, sortConfig]);
+
+    const { data: fetchedEmployees, isLoading: isLoadingEmployees } = useCollection<Directori>(employeeQuery, {
+      onComplete: () => setIsSearching(false),
+      onError: () => setIsSearching(false)
+    });
+
+
+    const employees = useMemo(() => {
+         if (!fetchedEmployees) return [];
+
+         let filtered = fetchedEmployees;
+
+         if (searchTerm) {
+            const lowercasedSearch = searchTerm.toLowerCase();
+            filtered = fetchedEmployees.filter(emp => 
+                emp.nom.toLowerCase().startsWith(lowercasedSearch) || emp.cognom.toLowerCase().startsWith(lowercasedSearch)
+            );
+         }
+        
+        return filtered.sort((a,b) => {
+            const aVal = a[sortConfig.key] || '';
+            const bVal = b[sortConfig.key] || '';
+            const comparison = String(aVal).localeCompare(String(bVal));
+            return sortConfig.direction === 'asc' ? comparison : -comparison;
+        });
+
+    }, [fetchedEmployees, searchTerm, sortConfig]);
+
 
     const handleSearch = () => {
-        setHasSearched(true);
+        setSearchTerm(nameFilter.trim());
+        setDepartmentFilter('');
     };
     
     const handleDepartmentSelect = (depName: string) => {
         const newFilter = depName === departmentFilter ? "" : depName;
         setDepartmentFilter(newFilter);
         setDepartmentOpen(false);
-        if (newFilter) {
-            setNameFilter(''); // Clear name filter when dept filter is applied
-            setHasSearched(true);
-        } else {
-            setHasSearched(false);
-        }
+        setSearchTerm('');
+        setNameFilter('');
     };
     
     const clearFilters = () => {
         setNameFilter('');
         setDepartmentFilter('');
-        setHasSearched(false);
+        setSearchTerm('');
     }
 
     const currentDepartment = departments?.find(dep => dep.name === departmentFilter);
-    const effectiveIsLoading = isLoadingDepts || isLoadingName || isLoadingLastName || isLoadingDeptResults;
+    const effectiveIsLoading = isLoadingDepts || isSearching || isLoadingEmployees;
+    const hasActiveFilter = searchTerm || departmentFilter;
 
     const renderSortArrow = (key: SortKey) => {
         if (sortConfig.key === key) {
@@ -135,8 +133,6 @@ export default function DirectoryPage() {
         }
         return null;
     };
-    
-    const showResults = hasSearched && (nameSearchTerm || departmentFilter);
 
     return (
         <Card>
@@ -155,11 +151,7 @@ export default function DirectoryPage() {
                             <Input
                                 placeholder="Buscar por nombre o apellido..."
                                 value={nameFilter}
-                                onChange={(e) => {
-                                    setNameFilter(e.target.value);
-                                    if(departmentFilter) setDepartmentFilter('');
-                                    if(!e.target.value) setHasSearched(false);
-                                }}
+                                onChange={(e) => setNameFilter(e.target.value)}
                                 className="pl-10"
                             />
                             <Button type="submit" className="sr-only">Buscar</Button>
@@ -211,7 +203,7 @@ export default function DirectoryPage() {
                         </Popover>
                     </div>
                 </div>
-                 {(nameFilter || departmentFilter) && (
+                 {hasActiveFilter && (
                     <div className="mb-4 text-right">
                         <Button variant="ghost" onClick={clearFilters}>
                             <XIcon className="h-4 w-4 mr-2" />
@@ -226,7 +218,7 @@ export default function DirectoryPage() {
                         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                         <p className="ml-2">Buscando empleados...</p>
                     </div>
-                ) : showResults && employees.length > 0 ? (
+                ) : hasActiveFilter && employees.length > 0 ? (
                     <>
                     <div className="relative">
                         <Table>
@@ -289,7 +281,7 @@ export default function DirectoryPage() {
                         </Table>
                     </div>
                     </>
-                ) : hasSearched ? (
+                ) : hasActiveFilter ? (
                     <div className="text-center text-muted-foreground py-8">
                          <p>No se han encontrado empleados que coincidan con la búsqueda.</p>
                     </div>

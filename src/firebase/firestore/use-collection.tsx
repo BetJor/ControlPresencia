@@ -15,6 +15,11 @@ import { FirestorePermissionError } from '@/firebase/errors';
 /** Utility type to add an 'id' field to a given type T. */
 export type WithId<T> = T & { id: string };
 
+type UseCollectionOptions = {
+    onComplete?: () => void;
+    onError?: (error: FirestoreError | Error) => void;
+};
+
 /**
  * Interface for the return value of the useCollection hook.
  * @template T Type of the document data.
@@ -53,7 +58,8 @@ export interface InternalQuery extends Query<DocumentData> {
  * @returns {UseCollectionResult<T>} Object with data, isLoading, error.
  */
 export function useCollection<T = any>(
-    memoizedTargetRefOrQuery: ((CollectionReference<DocumentData> | Query<DocumentData>) & {__memo?: boolean})  | null | undefined
+    memoizedTargetRefOrQuery: ((CollectionReference<DocumentData> | Query<DocumentData>) & {__memo?: boolean})  | null | undefined,
+    options: UseCollectionOptions = {}
 ): UseCollectionResult<T> {
   type ResultItemType = WithId<T>;
   type StateDataType = ResultItemType[] | null;
@@ -87,6 +93,7 @@ export function useCollection<T = any>(
         setSnapshot(snapshot);
         setError(null);
         setIsLoading(false);
+        options.onComplete?.();
       },
       (error: FirestoreError) => {
         // This logic extracts the path from either a ref or a query
@@ -104,6 +111,7 @@ export function useCollection<T = any>(
         setData(null)
         setSnapshot(null);
         setIsLoading(false)
+        options.onError?.(contextualError);
 
         // trigger global error propagation
         errorEmitter.emit('permission-error', contextualError);
@@ -111,7 +119,7 @@ export function useCollection<T = any>(
     );
 
     return () => unsubscribe();
-  }, [memoizedTargetRefOrQuery]); // Re-run only if the target query/reference changes.
+  }, [memoizedTargetRefOrQuery, options.onComplete, options.onError]); // Re-run only if the target query/reference changes.
   
   if(memoizedTargetRefOrQuery && !memoizedTargetRefOrQuery.__memo) {
     throw new Error(memoizedTargetRefOrQuery + ' was not properly memoized using useMemoFirebase');
