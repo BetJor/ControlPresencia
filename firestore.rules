@@ -1,189 +1,207 @@
 /**
  * @file Firestore Security Rules
- * @description This ruleset enforces a multi-layered security model, balancing open access for public information with strict controls for private and user-specific data.
+ * @description This ruleset enforces a role-based access control model with an emphasis on authorization independence and structural segregation.
  *
  * Data Structure:
- * - /users/{userId}: Stores user profiles, secured with owner-only access.  User roles are denormalized here for authorization independence.
- * - /attendance_records/{attendanceRecordId}: Stores attendance records, with no client write access by default.
- * - /terminals/{terminalId}: Stores terminal information, with no client write access by default.
- * - /incident_types/{incidentTypeId}: Stores incident types, with no client write access by default.
- * - /employees/{employeeId}: Stores employee information, with no client write access by default.
- * - /visit_registrations/{visitRegistrationId}: Stores visit registration data, with no client write access by default.
- * - /favorite_visitors/{favoriteVisitorId}: Stores favorite visitor data, with no client write access by default.
- * - /usuaris_dins/{usuariId}: Stores a list of users currently in the office, designed for public read access but with restricted write access.
- * - /directori/{directoriId}: Stores employee directory information, designed for public read access but with restricted write access.
- * - /departaments/{departamentId}: Stores the list of unique departments, designed for public read access but with restricted write access.
+ * - /users/{userId}: Stores user profiles, with the 'role' field denormalized for efficient authorization.
+ * - /attendance_records/{attendanceRecordId}: Stores attendance records.
+ * - /terminals/{terminalId}: Stores terminal information.
+ * - /incident_types/{incidentTypeId}: Stores incident types.
+ * - /employees/{employeeId}: Stores employee information.
+ * - /visit_registrations/{visitRegistrationId}: Stores visit registration data.
+ * - /favorite_visitors/{favoriteVisitorId}: Stores information about favorite visitors.
+ * - /usuaris_dins/{usuariId}: Stores a 'whiteboard' of users currently in the office, intended for public read access.
+ * - /directori/{directoriId}: Stores employee directory information.
+ * - /departaments/{departamentId}: Stores department names for filtering purposes.
  *
  * Key Security Decisions:
- * - User listing is generally disallowed to prevent enumeration.
- * - The /usuaris_dins, /directori, and /departaments collections are designed for public read access.
- * - Write access to most collections is disabled for clients and intended to be managed by backend processes.
+ * - User listing is generally disallowed.
+ * - The 'usuaris_dins' collection is designed for public read access by authenticated users.
+ * - The 'departaments' collection is designed for public read access.
+ * - The default security posture is strict, requiring explicit rules for each operation.
  *
  * Denormalization for Authorization:
- * - User roles are denormalized into the /users/{userId} document itself to avoid costly `get()` calls in security rules.
+ * - User roles are stored directly within the /users/{userId} document. This avoids needing to perform `get()` operations to determine a user's role when accessing other data.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Allows users to read and manage their own user profiles.
+     * @description Manages user profiles. Only the user themselves can read or write their profile.
      * @path /users/{userId}
-     * @allow (create) - Authenticated user can create their profile if the userId matches their auth.uid.
-     * @allow (get, list, update, delete) - Authenticated user can only access their own profile data.
-     * @deny (create) - User cannot create a profile with a mismatched userId.
+     * @allow (create) Authenticated user can create their own profile if the userId matches their auth.uid.
+     * @allow (get, update, delete) Authenticated user can get, update, and delete their own profile if the userId matches their auth.uid.
+     * @deny (create) if the userId does not match the authenticated user's ID.
+     * @deny (get, update, delete) if the userId does not match the authenticated user's ID.
+     * @deny (list) Prevents listing all users.
      * @principle Enforces document ownership for user profiles.
      */
     match /users/{userId} {
-      function isOwner(userId) {
-        return request.auth.uid == userId;
-      }
       function isSignedIn() {
         return request.auth != null;
       }
-      allow get: if isSignedIn() && isOwner(userId);
-      allow list: if false;
+      function isOwner(userId) {
+        return request.auth.uid == userId;
+      }
+
       allow create: if isSignedIn() && isOwner(userId) && request.resource.data.id == request.auth.uid;
-      allow update: if isSignedIn() && isOwner(userId) && resource != null && request.resource.data.id == resource.data.id;
-      allow delete: if isSignedIn() && isOwner(userId) && resource != null;
+      allow get, update, delete: if isSignedIn() && isOwner(userId) && resource.data.id == userId;
+      allow list: if false;
     }
 
     /**
-     * @description Restricts access to attendance records. Only backend processes should be able to manage these records.
+     * @description Manages attendance records. All read and write operations are denied for now.
      * @path /attendance_records/{attendanceRecordId}
-     * @allow None - No client-side access is permitted.
-     * @principle Enforces strict backend control over attendance records.
+     * @allow (create) Not granted.
+     * @allow (get, list) Not granted.
+     * @allow (update, delete) Not granted.
+     * @deny (create) Always denied.
+     * @deny (get, list) Always denied.
+     * @deny (update, delete) Always denied.
+     * @principle Access to attendance records is currently restricted.
      */
     match /attendance_records/{attendanceRecordId} {
-      allow get: if false;
-      allow list: if false;
       allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow get, list: if false;
+      allow update, delete: if false;
     }
 
     /**
-     * @description Restricts access to terminals. Only backend processes should be able to manage terminal information.
+     * @description Manages terminals. All read and write operations are denied for now.
      * @path /terminals/{terminalId}
-     * @allow None - No client-side access is permitted.
-     * @principle Enforces strict backend control over terminal information.
+     * @allow (create) Not granted.
+     * @allow (get, list) Not granted.
+     * @allow (update, delete) Not granted.
+     * @deny (create) Always denied.
+     * @deny (get, list) Always denied.
+     * @deny (update, delete) Always denied.
+     * @principle Access to terminals is currently restricted.
      */
     match /terminals/{terminalId} {
-      allow get: if false;
-      allow list: if false;
       allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow get, list: if false;
+      allow update, delete: if false;
     }
 
     /**
-     * @description Restricts access to incident types. Only backend processes should be able to manage incident types.
+     * @description Manages incident types. All read and write operations are denied for now.
      * @path /incident_types/{incidentTypeId}
-     * @allow None - No client-side access is permitted.
-     * @principle Enforces strict backend control over incident types.
+     * @allow (create) Not granted.
+     * @allow (get, list) Not granted.
+     * @allow (update, delete) Not granted.
+     * @deny (create) Always denied.
+     * @deny (get, list) Always denied.
+     * @deny (update, delete) Always denied.
+     * @principle Access to incident types is currently restricted.
      */
     match /incident_types/{incidentTypeId} {
-      allow get: if false;
-      allow list: if false;
       allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow get, list: if false;
+      allow update, delete: if false;
     }
 
     /**
-     * @description Restricts access to employee information. Only backend processes should be able to manage employee information.
+     * @description Manages employees. All read and write operations are denied for now.
      * @path /employees/{employeeId}
-     * @allow None - No client-side access is permitted.
-     * @principle Enforces strict backend control over employee information.
+     * @allow (create) Not granted.
+     * @allow (get, list) Not granted.
+     * @allow (update, delete) Not granted.
+     * @deny (create) Always denied.
+     * @deny (get, list) Always denied.
+     * @deny (update, delete) Always denied.
+     * @principle Access to employees is currently restricted.
      */
     match /employees/{employeeId} {
-      allow get: if false;
-      allow list: if false;
       allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow get, list: if false;
+      allow update, delete: if false;
     }
 
     /**
-     * @description Restricts access to visit registrations. Only backend processes should be able to manage visit registrations.
+     * @description Manages visit registrations. All read and write operations are denied for now.
      * @path /visit_registrations/{visitRegistrationId}
-     * @allow None - No client-side access is permitted.
-     * @principle Enforces strict backend control over visit registration information.
+     * @allow (create) Not granted.
+     * @allow (get, list) Not granted.
+     * @allow (update, delete) Not granted.
+     * @deny (create) Always denied.
+     * @deny (get, list) Always denied.
+     * @deny (update, delete) Always denied.
+     * @principle Access to visit registrations is currently restricted.
      */
     match /visit_registrations/{visitRegistrationId} {
-      allow get: if false;
-      allow list: if false;
       allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow get, list: if false;
+      allow update, delete: if false;
     }
 
     /**
-     * @description Restricts access to favorite visitors. Only backend processes should be able to manage favorite visitor information.
+     * @description Manages favorite visitors. All read and write operations are denied for now.
      * @path /favorite_visitors/{favoriteVisitorId}
-     * @allow None - No client-side access is permitted.
-     * @principle Enforces strict backend control over favorite visitor information.
+     * @allow (create) Not granted.
+     * @allow (get, list) Not granted.
+     * @allow (update, delete) Not granted.
+     * @deny (create) Always denied.
+     * @deny (get, list) Always denied.
+     * @deny (update, delete) Always denied.
+     * @principle Access to favorite visitors is currently restricted.
      */
     match /favorite_visitors/{favoriteVisitorId} {
-      allow get: if false;
-      allow list: if false;
       allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow get, list: if false;
+      allow update, delete: if false;
     }
 
     /**
-     * @description Allows any authenticated user to read the list of users currently in the office. Writes should be restricted to a backend process.
+     * @description Manages the 'usuaris_dins' collection, representing users currently in the office.
      * @path /usuaris_dins/{usuariId}
-     * @allow (get, list) - Any authenticated user can view the list.
-     * @deny (create, update, delete) - Client-side writes are not permitted.
-     * @principle Provides public read access to presence information while restricting write access.
+     * @allow (get, list) Allows any authenticated user to read the "whiteboard" of current users.
+     * @allow (create) Not granted.
+     * @allow (update, delete) Not granted.
+     * @deny (create) Always denied.
+     * @deny (update, delete) Always denied.
+     * @principle Provides public read access for authenticated users to the 'usuaris_dins' collection.
      */
     match /usuaris_dins/{usuariId} {
       function isSignedIn() {
         return request.auth != null;
       }
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
+      allow get, list: if isSignedIn();
       allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow update, delete: if false;
     }
 
     /**
-     * @description Allows any authenticated user to read the employee directory. Writes should be restricted to a backend process.
+     * @description Manages the 'directori' collection, representing the company directory.
      * @path /directori/{directoriId}
-     * @allow (get, list) - Any authenticated user can view the directory.
-     * @deny (create, update, delete) - Client-side writes are not permitted.
-     * @principle Provides public read access to the employee directory while restricting write access.
+     * @allow (get, list) Not granted.
+     * @allow (create) Not granted.
+     * @allow (update, delete) Not granted.
+     * @deny (get, list) Always denied.
+     * @deny (create) Always denied.
+     * @deny (update, delete) Always denied.
+     * @principle Access to the company directory is currently restricted.
      */
     match /directori/{directoriId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
+      allow get, list: if false;
       allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow update, delete: if false;
     }
 
     /**
-     * @description Allows any authenticated user to read the list of departments. Writes should be restricted to a backend process.
+     * @description Manages the 'departaments' collection, representing department names.
      * @path /departaments/{departamentId}
-     * @allow (get, list) - Any authenticated user can view the list.
-     * @deny (create, update, delete) - Client-side writes are not permitted.
-     * @principle Provides public read access to the list of departments while restricting write access.
+     * @allow (get, list) Allows public read access to the department list.
+     * @allow (create) Not granted.
+     * @allow (update, delete) Not granted.
+     * @deny (create) Always denied.
+     * @deny (update, delete) Always denied.
+     * @principle Provides public read access to the 'departaments' collection.
      */
     match /departaments/{departamentId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
+      allow get, list: if true;
       allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow update, delete: if false;
     }
   }
 }

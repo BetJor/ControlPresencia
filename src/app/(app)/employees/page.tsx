@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
-import { collection, query, where, orderBy, or } from "firebase/firestore";
+import { collection, query, where, orderBy, getDocs, or } from "firebase/firestore";
 import { Loader2, BookUser, Mail, Phone, Search, ChevronsUpDown, Check, XIcon, ArrowUp, ArrowDown } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -30,8 +30,10 @@ export default function DirectoryPage() {
     const [departmentOpen, setDepartmentOpen] = useState(false);
     
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'nom', direction: 'asc' });
-    const [searchTerm, setSearchTerm] = useState('');
-    const [isSearching, setIsSearching] = useState(false);
+    
+    const [employees, setEmployees] = useState<Directori[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [hasSearched, setHasSearched] = useState(false);
 
     const departmentsCollection = useMemoFirebase(() => {
         if (!firestore) return null;
@@ -40,99 +42,124 @@ export default function DirectoryPage() {
     const { data: departments, isLoading: isLoadingDepts } = useCollection<Department>(departmentsCollection);
     
     const handleSort = (key: SortKey) => {
-        setSortConfig(prevConfig => {
-            if (prevConfig.key === key) {
-                return { key, direction: prevConfig.direction === 'asc' ? 'desc' : 'asc' };
-            }
-            return { key, direction: 'asc' };
-        });
-    };
+        let direction: SortDirection = 'asc';
+        if (sortConfig.key === key && sortConfig.direction === 'asc') {
+            direction = 'desc';
+        }
+        setSortConfig({ key, direction });
 
-    const employeeQuery = useMemoFirebase(() => {
-        if (!firestore || (!searchTerm && !departmentFilter)) return null;
-        setIsSearching(true);
+        const sortedEmployees = [...employees].sort((a, b) => {
+            const aVal = a[key] || '';
+            const bVal = b[key] || '';
+            const comparison = String(aVal).localeCompare(String(bVal));
+            return direction === 'asc' ? comparison : -comparison;
+        });
+        setEmployees(sortedEmployees);
+    };
+    
+    const performSearch = async () => {
+        if (!firestore) return;
+
+        const searchTerm = nameFilter.trim();
+        
+        if (!searchTerm && !departmentFilter) {
+            setEmployees([]);
+            setHasSearched(false);
+            return;
+        }
+
+        setIsLoading(true);
+        setHasSearched(true);
+
         const baseCollection = collection(firestore, 'directori');
+        let finalQuery;
 
         if (searchTerm) {
             const searchTermCapitalized = searchTerm.charAt(0).toUpperCase() + searchTerm.slice(1);
-            return query(
+            finalQuery = query(
                 baseCollection, 
                 or(
                     where('nom', '>=', searchTermCapitalized),
                     where('cognom', '>=', searchTermCapitalized)
                 )
             );
-        }
-
-        if (departmentFilter) {
-            return query(
+        } else if (departmentFilter) {
+            finalQuery = query(
                 baseCollection,
                 where('departament', '==', departmentFilter),
                 orderBy(sortConfig.key, sortConfig.direction)
             );
+        } else {
+             setIsLoading(false);
+             setEmployees([]);
+             return;
         }
-        
-        return null;
 
-    }, [firestore, searchTerm, departmentFilter, sortConfig]);
+        try {
+            const querySnapshot = await getDocs(finalQuery);
+            let fetchedEmployees = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Directori);
 
-    const { data: fetchedEmployees, isLoading: isLoadingEmployees } = useCollection<Directori>(employeeQuery, {
-      onComplete: () => setIsSearching(false),
-      onError: () => setIsSearching(false)
-    });
+            if (searchTerm) {
+                const lowercasedSearch = searchTerm.toLowerCase();
+                fetchedEmployees = fetchedEmployees.filter(emp => 
+                    emp.nom.toLowerCase().startsWith(lowercasedSearch) || emp.cognom.toLowerCase().startsWith(lowercasedSearch)
+                );
+            }
+            
+            const sorted = fetchedEmployees.sort((a,b) => {
+                const aVal = a[sortConfig.key] || '';
+                const bVal = b[sortConfig.key] || '';
+                const comparison = String(aVal).localeCompare(String(bVal));
+                return sortConfig.direction === 'asc' ? comparison : -comparison;
+            });
+            setEmployees(sorted);
 
-
-    const employees = useMemo(() => {
-         if (!fetchedEmployees) return [];
-
-         let filtered = fetchedEmployees;
-
-         if (searchTerm) {
-            const lowercasedSearch = searchTerm.toLowerCase();
-            filtered = fetchedEmployees.filter(emp => 
-                emp.nom.toLowerCase().startsWith(lowercasedSearch) || emp.cognom.toLowerCase().startsWith(lowercasedSearch)
-            );
-         }
-        
-        return filtered.sort((a,b) => {
-            const aVal = a[sortConfig.key] || '';
-            const bVal = b[sortConfig.key] || '';
-            const comparison = String(aVal).localeCompare(String(bVal));
-            return sortConfig.direction === 'asc' ? comparison : -comparison;
-        });
-
-    }, [fetchedEmployees, searchTerm, sortConfig]);
-
-
-    const handleSearch = () => {
-        setSearchTerm(nameFilter.trim());
-        setDepartmentFilter('');
+        } catch (error) {
+            console.error("Error searching employees:", error);
+            setEmployees([]);
+        } finally {
+            setIsLoading(false);
+        }
     };
-    
+
+    const handleSearchSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        setDepartmentFilter('');
+        performSearch();
+    };
+
     const handleDepartmentSelect = (depName: string) => {
         const newFilter = depName === departmentFilter ? "" : depName;
+        setNameFilter('');
         setDepartmentFilter(newFilter);
         setDepartmentOpen(false);
-        setSearchTerm('');
-        setNameFilter('');
+        // Automatically search when a department is selected
+        if (newFilter) {
+            // A bit of a hack to make sure the state is updated before searching
+            setTimeout(() => performSearch(), 0);
+        } else {
+            clearFilters();
+        }
     };
     
     const clearFilters = () => {
         setNameFilter('');
         setDepartmentFilter('');
-        setSearchTerm('');
+        setEmployees([]);
+        setHasSearched(false);
     }
 
     const currentDepartment = departments?.find(dep => dep.name === departmentFilter);
-    const effectiveIsLoading = isLoadingDepts || isSearching || isLoadingEmployees;
-    const hasActiveFilter = searchTerm || departmentFilter;
+    const effectiveIsLoading = isLoadingDepts || isLoading;
 
     const renderSortArrow = (key: SortKey) => {
         if (sortConfig.key === key) {
             return sortConfig.direction === 'asc' ? <ArrowUp className="ml-2 h-4 w-4" /> : <ArrowDown className="ml-2 h-4 w-4" />;
         }
-        return null;
+        return <ChevronsUpDown className="ml-2 h-4 w-4 opacity-30" />;
     };
+
+    const hasActiveFilter = nameFilter || departmentFilter;
 
     return (
         <Card>
@@ -146,7 +173,7 @@ export default function DirectoryPage() {
             <CardContent>
                 <div className="flex flex-col md:flex-row items-center gap-4 mb-6">
                      <div className="relative w-full md:w-1/2 flex items-center gap-2">
-                        <form className="relative w-full" onSubmit={(e) => { e.preventDefault(); handleSearch(); }}>
+                        <form className="relative w-full" onSubmit={handleSearchSubmit}>
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input
                                 placeholder="Buscar por nombre o apellido..."
@@ -190,7 +217,12 @@ export default function DirectoryPage() {
                                                 <CommandItem
                                                     key={dep.id}
                                                     value={dep.name}
-                                                    onSelect={() => handleDepartmentSelect(dep.name)}
+                                                    onSelect={() => {
+                                                        setNameFilter(''); 
+                                                        setDepartmentFilter(dep.name);
+                                                        performSearch();
+                                                        setDepartmentOpen(false);
+                                                    }}
                                                 >
                                                     <Check className={cn("mr-2 h-4 w-4", departmentFilter === dep.name ? "opacity-100" : "opacity-0")} />
                                                     {dep.name}
@@ -218,7 +250,7 @@ export default function DirectoryPage() {
                         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                         <p className="ml-2">Buscando empleados...</p>
                     </div>
-                ) : hasActiveFilter && employees.length > 0 ? (
+                ) : hasSearched && employees.length > 0 ? (
                     <>
                     <div className="relative">
                         <Table>
@@ -281,7 +313,7 @@ export default function DirectoryPage() {
                         </Table>
                     </div>
                     </>
-                ) : hasActiveFilter ? (
+                ) : hasSearched ? (
                     <div className="text-center text-muted-foreground py-8">
                          <p>No se han encontrado empleados que coincidan con la búsqueda.</p>
                     </div>
