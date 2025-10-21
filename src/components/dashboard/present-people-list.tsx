@@ -62,7 +62,7 @@ export default function PresentPeopleList() {
   const { data: visitors, isLoading: visitorsLoading } = useCollection<VisitRegistration>(visitorsCollection);
 
   const presentStaffIds = useMemo(() => {
-    return presentStaffRaw?.map(staff => staff.id) ?? [];
+    return presentStaffRaw?.map(staff => String(staff.id).trim()).filter(id => id) ?? [];
   }, [presentStaffRaw]);
   
   // 3. Create a memoized query to get details for ONLY the present staff
@@ -81,11 +81,12 @@ export default function PresentPeopleList() {
   const enrichedStaff = useMemo(() => {
     if (!presentStaffRaw || !detailedStaff) return [];
     
-    // Create a map for quick lookups
-    const staffMap = new Map(detailedStaff.map(s => [s.centreCost, s]));
+    // Create a map for quick lookups, ensuring keys are trimmed.
+    const staffMap = new Map(detailedStaff.map(s => [String(s.centreCost).trim(), s]));
     
     return presentStaffRaw.map(present => {
-      const details = staffMap.get(present.id);
+      // Ensure the ID used for lookup is also trimmed.
+      const details = staffMap.get(String(present.id).trim());
       return {
         ...present,
         // Fallback to the data from `usuaris_dins` if no details are found in `directori`
