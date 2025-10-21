@@ -92,7 +92,11 @@ export default function PresentPeopleList() {
         nom: details?.nom ?? present.nom,
         cognom: details?.cognom ?? present.cognoms ?? '',
       };
-    }).sort((a, b) => (a.cognom || '').localeCompare(b.cognom || ''));
+    }).sort((a, b) => {
+        const timeA = a.horaDarreraEntrada?.toDate().getTime() || 0;
+        const timeB = b.horaDarreraEntrada?.toDate().getTime() || 0;
+        return timeB - timeA; // Sort descending (most recent first)
+    });
   }, [presentStaffRaw, detailedStaff]);
 
 
