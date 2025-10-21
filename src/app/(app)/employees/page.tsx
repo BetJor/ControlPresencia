@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
@@ -18,6 +18,10 @@ import type { Directori } from "@/lib/types";
 const PAGE_SIZE = 15;
 type SortKey = 'nom' | 'cognom' | 'centreCost';
 
+type Department = {
+    id: string;
+    name: string;
+}
 
 export default function DirectoryPage() {
     const firestore = useFirestore();
@@ -30,17 +34,11 @@ export default function DirectoryPage() {
 
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: OrderByDirection }>({ key: 'nom', direction: 'asc' });
 
-    const allDepartmentsCollection = useMemoFirebase(() => {
+    const departmentsCollection = useMemoFirebase(() => {
         if (!firestore) return null;
-        return query(collection(firestore, 'directori'), orderBy('departament'));
+        return query(collection(firestore, 'departaments'), orderBy('name'));
     }, [firestore]);
-    const { data: allEmployeesForDepts, isLoading: isLoadingDepts } = useCollection<Directori>(allDepartmentsCollection);
-
-    const departments = useMemo(() => {
-        if (!allEmployeesForDepts) return [];
-        const allDepartments = allEmployeesForDepts.map(employee => employee.departament).filter(Boolean);
-        return [...new Set(allDepartments)].sort();
-    }, [allEmployeesForDepts]);
+    const { data: departments, isLoading: isLoadingDepts } = useCollection<Department>(departmentsCollection);
     
     const handleSort = (key: SortKey) => {
         setSortConfig(prevConfig => {
@@ -152,7 +150,7 @@ export default function DirectoryPage() {
     }, [nameFilter, departmentFilter, sortConfig]);
 
 
-    const currentDepartment = departments.find(dep => dep === departmentFilter)
+    const currentDepartment = departments?.find(dep => dep.name === departmentFilter)
     const effectiveIsLoading = isLoadingPaginated || isLoadingDepts || isLoadingName || isLoadingLastName;
 
     const renderSortArrow = (key: SortKey) => {
@@ -204,7 +202,7 @@ export default function DirectoryPage() {
                                     className="w-full justify-between"
                                 >
                                     {currentDepartment
-                                        ? currentDepartment
+                                        ? currentDepartment.name
                                         : "Seleccionar departamento..."}
                                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                 </Button>
@@ -230,16 +228,16 @@ export default function DirectoryPage() {
                                              </CommandItem>
                                             {departments && departments.map((dep) => (
                                                 <CommandItem
-                                                    key={dep}
-                                                    value={dep}
+                                                    key={dep.id}
+                                                    value={dep.name}
                                                     onSelect={(currentValue) => {
-                                                        const newFilter = dep === departmentFilter ? "" : dep;
+                                                        const newFilter = dep.name === departmentFilter ? "" : dep.name;
                                                         setDepartmentFilter(newFilter);
                                                         setDepartmentOpen(false);
                                                     }}
                                                 >
-                                                    <Check className={cn("mr-2 h-4 w-4", departmentFilter === dep ? "opacity-100" : "opacity-0")} />
-                                                    {dep}
+                                                    <Check className={cn("mr-2 h-4 w-4", departmentFilter === dep.name ? "opacity-100" : "opacity-0")} />
+                                                    {dep.name}
                                                 </CommandItem>
                                             ))}
                                         </CommandGroup>
