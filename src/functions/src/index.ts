@@ -247,12 +247,11 @@ exports.sincronitzarPersonalPresent = functions
         if (punches.length % 2 !== 0) {
           punches.sort((a, b) => b.parsedDate.getTime() - a.parsedDate.getTime());
           const lastPunch = punches[0];
-          presentUsers[employeeId] = { 
-              horaDarreraEntrada: Timestamp.fromDate(lastPunch.parsedDate),
-              // Store original name data as a fallback
-              nomOriginal: lastPunch.Nombre || '',
-              cognomsOriginal: lastPunch.Apellidos || '',
-            };
+          presentUsers[employeeId] = {
+            horaDarreraEntrada: Timestamp.fromDate(lastPunch.parsedDate),
+            nomOriginal: lastPunch.Nombre || '',
+            cognomsOriginal: lastPunch.Apellidos || '',
+          };
         }
       }
 
@@ -285,8 +284,8 @@ exports.sincronitzarPersonalPresent = functions
             const userInfo = directoriUsersMap.get(userId);
             const dataToSet = {
                 horaDarreraEntrada: presentUsers[userId].horaDarreraEntrada,
-                nom: userInfo?.nom || presentUsers[userId].nomOriginal || 'N/D',
-                cognoms: userInfo?.cognom || presentUsers[userId].cognomsOriginal || '',
+                nom: userInfo?.nom || presentUsers[userId].nomOriginal,
+                cognoms: userInfo?.cognom || presentUsers[userId].cognomsOriginal,
             };
             const docRef = usuarisDinsCollection.doc(userId);
             batch.set(docRef, dataToSet, { merge: true });
@@ -308,4 +307,3 @@ exports.sincronitzarPersonalPresent = functions
       return null;
     }
   });
-
