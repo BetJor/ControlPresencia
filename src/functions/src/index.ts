@@ -189,13 +189,15 @@ exports.getDadesAppSheet = onCall({ region: "europe-west1", memory: "1GiB", time
 
 
 exports.sincronitzarPersonalPresent = functions
+  .runWith({secrets: ["APP_ACCESS_KEY"]})
   .region('europe-west1')
   .pubsub.schedule('every 5 minutes')
+  .timeZone('Europe/Madrid')
   .onRun(async (context) => {
     console.log("TRACE: Iniciant la sincronització de personal present.");
 
     const APP_ID = "94c06d4b-4ed0-49d4-85a9-003710c7038b";
-    const APP_ACCESS_KEY = "V2-LINid-jygnH-4Eqx6-xEe13-kXpTW-ZALoX-yY7yc-q9EMj";
+    const APP_ACCESS_KEY = process.env.APP_ACCESS_KEY;
     const db = getFirestore();
 
     try {
@@ -205,7 +207,7 @@ exports.sincronitzarPersonalPresent = functions
 
       const response = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'ApplicationAccessKey': APP_ACCESS_KEY },
+        headers: { 'Content-Type': 'application/json', 'ApplicationAccessKey': APP_ACCESS_KEY! },
         body: body
       });
 
