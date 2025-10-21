@@ -120,6 +120,14 @@ export default function PresentPeopleList() {
     return 'N/A';
   };
 
+  const getFormattedDateTime = (timestamp: any) => {
+    if (timestamp && typeof timestamp.toDate === 'function') {
+        const date = timestamp.toDate();
+        return date.toLocaleDateString([], { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+    return 'N/A';
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -219,6 +227,8 @@ export default function PresentPeopleList() {
                         <TableRow>
                           <TableHead className="py-2 px-3">Cognoms</TableHead>
                           <TableHead className="py-2 px-3">Nom</TableHead>
+                          <TableHead className="py-2 px-3">Identificador</TableHead>
+                          <TableHead className="py-2 px-3">Darrera Entrada</TableHead>
                           <TableHead className="text-right py-2 px-3">Accions</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -229,6 +239,8 @@ export default function PresentPeopleList() {
                               {employee.cognom}
                             </TableCell>
                             <TableCell className="py-2 px-3">{employee.nom}</TableCell>
+                            <TableCell className="py-2 px-3">{employee.id}</TableCell>
+                            <TableCell className="py-2 px-3">{getFormattedDateTime(employee.horaDarreraEntrada)}</TableCell>
                              <TableCell className="text-right py-2 px-3">
                               <Tooltip>
                                 <TooltipTrigger asChild>
