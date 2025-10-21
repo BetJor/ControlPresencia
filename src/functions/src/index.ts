@@ -223,7 +223,7 @@ exports.sincronitzarPersonalPresent = functions
 
       for (const fitxatge of fitxatges) {
         const dateStr = fitxatge['Fecha y Hora'] || fitxatge['Data'];
-        let employeeId = fitxatge.P_CI;
+        let employeeId = fitxatge.Identificador;
 
         if (!dateStr || typeof dateStr !== 'string' || employeeId === null || employeeId === undefined) continue;
         
