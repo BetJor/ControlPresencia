@@ -1,181 +1,171 @@
 /**
- * @file Firestore Security Rules
- * @description This ruleset enforces a multi-layered security model for the Clockwork application, focusing on user-specific data, attendance tracking, and directory services.
+ * @file Overview
+ * This ruleset enforces a role-based access control model.
  *
  * Data Structure:
- * - /users/{userId}: Stores user profiles with denormalized roles for efficient authorization.
- * - /attendance_records/{attendanceRecordId}: Stores attendance records, linked to employees and terminals.
- * - /terminals/{terminalId}: Stores terminal information.
- * - /incident_types/{incidentTypeId}: Stores incident types.
+ * - /users/{userId}: Stores user profile data, with the user's role denormalized directly into the document for efficient authorization.
+ * - /attendance_records/{attendanceRecordId}: Stores attendance records, with `employeeId` to associate records with employees.
+ * - /terminals/{terminalId}: Stores information about terminals.
+ * - /incident_types/{incidentTypeId}: Stores types of incidents.
  * - /employees/{employeeId}: Stores employee information.
- * - /visit_registrations/{visitRegistrationId}: Stores visitor registration details.
- * - /favorite_visitors/{favoriteVisitorId}: Stores favorite visitor details.
- * - /usuaris_dins/{usuariId}: Stores a real-time list of users currently in the office (whiteboard).
+ * - /visit_registrations/{visitRegistrationId}: Stores visit registrations.
+ * - /favorite_visitors/{favoriteVisitorId}: Stores favorite visitor information.
+ * - /usuaris_dins/{usuariId}: Stores data about users currently inside the office (whiteboard). Intended to be written by a trusted backend.
  * - /directori/{directoriId}: Stores employee directory information.
  *
  * Key Security Decisions:
- * - User data is strictly controlled by the owner (the user themselves).
- * - The 'usuaris_dins' collection (whiteboard) is publicly readable by authenticated users but updatable only by a trusted backend.
- * - Data types and schema are not strictly validated in this prototyping phase, focusing instead on authorization.
- * - Listing of Attendance Records, Terminals, Incident Types, Employees, Visit Registrations and Favorite Visitors is open to all authenticated users.
+ * - Users can only read and write their own profile data under /users/{userId}.
+ * - The /usuaris_dins collection is readable by any authenticated user, but writes are restricted (intended for backend processes).
+ * - The /directori collection is readable by any authenticated user, but writes are restricted (intended for backend processes).
+ * - Other collections are generally writable by anyone (for prototyping purposes).
  *
  * Denormalization for Authorization:
- * - User roles are denormalized directly into the /users/{userId} document to avoid expensive `get()` calls during authorization.
- *
- * Structural Segregation:
- * - Private user data is stored under /users/{userId}, while public information like the list of users currently in the office is stored in a separate top-level collection (/usuaris_dins).
+ * - User roles are stored directly in the `/users/{userId}` document to avoid costly `get()` calls in security rules.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Secures user profiles, allowing only the user to read and write their own data.
+     * @description Grants access to user profiles based on ownership.
      * @path /users/{userId}
-     * @allow (create) - User with UID 'user_abc' can create their profile at /users/user_abc if request.auth.uid == 'user_abc'.
-     * @allow (get, update, delete) - User with UID 'user_abc' can read, update, and delete their profile at /users/user_abc.
-     * @deny (create) - User with UID 'user_xyz' cannot create a profile at /users/user_abc.
-     * @deny (update, delete) - User with UID 'user_xyz' cannot update or delete the profile at /users/user_abc.
-     * @principle Enforces document ownership for writes, restricts access to a user's own data tree.
+     * @allow (create) User 'n3JwHYpMBvMN40SoyMk8PJF6iJ12' can create their own profile at /users/n3JwHYpMBvMN40SoyMk8PJF6iJ12.
+     * @deny (create) User 'n3JwHYpMBvMN40SoyMk8PJF6iJ12' cannot create a profile at /users/otherUserId.
+     * @allow (read, write) User 'n3JwHYpMBvMN40SoyMk8PJF6iJ12' can read and write their own profile.
+     * @deny (read, write) User 'n3JwHYpMBvMN40SoyMk8PJF6iJ12' cannot read or write another user's profile.
+     * @principle Enforces document ownership for user profiles.
      */
     match /users/{userId} {
+      function isOwner(userId) {
+        return request.auth != null && request.auth.uid == userId;
+      }
+
+      function isExistingOwner(userId) {
+          return isOwner(userId) && resource != null;
+      }
+
       allow get: if isOwner(userId);
-      allow list: if false;
+      allow list: if false; // User listing is disabled for privacy.
       allow create: if isOwner(userId) && request.resource.data.id == userId;
       allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
       allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Secures attendance records, allowing any authenticated user to read and write.
+     * @description Allows access to attendance records.
      * @path /attendance_records/{attendanceRecordId}
-     * @allow (create) - Authenticated user can create an attendance record.
-     * @allow (get, list) - Any authenticated user can get or list attendance records.
-     * @allow (update, delete) - Authenticated user can update and delete any attendance record
-     * @principle Allows open read and write access.
+     * @allow (create) Any authenticated user can create an attendance record.
+     * @allow (read, write) Any authenticated user can read and write attendance records.
+     * @principle Open write access for prototyping.
      */
     match /attendance_records/{attendanceRecordId} {
-      allow get, list: if isSignedIn();
+      allow get, list: if true;
       allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
+      allow update: if isSignedIn() && resource != null;
+      allow delete: if isSignedIn() && resource != null;
     }
 
     /**
-     * @description Secures terminals, allowing any authenticated user to read and write.
+     * @description Allows access to terminal information.
      * @path /terminals/{terminalId}
-     * @allow (create) - Authenticated user can create a terminal.
-     * @allow (get, list) - Any authenticated user can get or list terminals.
-     * @allow (update, delete) - Authenticated user can update and delete any terminal.
-     * @principle Allows open read and write access.
+     * @allow (create) Any authenticated user can create terminal information.
+     * @allow (read, write) Any authenticated user can read and write terminal information.
+     * @principle Open write access for prototyping.
      */
     match /terminals/{terminalId} {
-      allow get, list: if isSignedIn();
+      allow get, list: if true;
       allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
+      allow update: if isSignedIn() && resource != null;
+      allow delete: if isSignedIn() && resource != null;
     }
 
     /**
-     * @description Secures incident types, allowing any authenticated user to read and write.
+     * @description Allows access to incident types.
      * @path /incident_types/{incidentTypeId}
-     * @allow (create) - Authenticated user can create an incident type.
-     * @allow (get, list) - Any authenticated user can get or list incident types.
-     * @allow (update, delete) - Authenticated user can update and delete any incident type.
-     * @principle Allows open read and write access.
+     * @allow (create) Any authenticated user can create incident types.
+     * @allow (read, write) Any authenticated user can read and write incident types.
+     * @principle Open write access for prototyping.
      */
     match /incident_types/{incidentTypeId} {
-      allow get, list: if isSignedIn();
+      allow get, list: if true;
       allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
+      allow update: if isSignedIn() && resource != null;
+      allow delete: if isSignedIn() && resource != null;
     }
 
     /**
-     * @description Secures employees, allowing any authenticated user to read and write.
+     * @description Allows access to employee information.
      * @path /employees/{employeeId}
-     * @allow (create) - Authenticated user can create an employee.
-     * @allow (get, list) - Any authenticated user can get or list employees.
-     * @allow (update, delete) - Authenticated user can update and delete any employee.
-     * @principle Allows open read and write access.
+     * @allow (create) Any authenticated user can create employee information.
+     * @allow (read, write) Any authenticated user can read and write employee information.
+     * @principle Open write access for prototyping.
      */
     match /employees/{employeeId} {
-      allow get, list: if isSignedIn();
+      allow get, list: if true;
       allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
+      allow update: if isSignedIn() && resource != null;
+      allow delete: if isSignedIn() && resource != null;
     }
 
     /**
-     * @description Secures visit registrations, allowing any authenticated user to read and write.
+     * @description Allows access to visit registration information.
      * @path /visit_registrations/{visitRegistrationId}
-     * @allow (create) - Authenticated user can create a visit registration.
-     * @allow (get, list) - Any authenticated user can get or list visit registrations.
-     * @allow (update, delete) - Authenticated user can update and delete any visit registration.
-     * @principle Allows open read and write access.
+     * @allow (create) Any authenticated user can create visit registration information.
+     * @allow (read, write) Any authenticated user can read and write visit registration information.
+     * @principle Open write access for prototyping.
      */
     match /visit_registrations/{visitRegistrationId} {
-      allow get, list: if isSignedIn();
+      allow get, list: if true;
       allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
+      allow update: if isSignedIn() && resource != null;
+      allow delete: if isSignedIn() && resource != null;
     }
 
     /**
-     * @description Secures favorite visitors, allowing any authenticated user to read and write.
+     * @description Allows access to favorite visitor information.
      * @path /favorite_visitors/{favoriteVisitorId}
-     * @allow (create) - Authenticated user can create a favorite visitor.
-     * @allow (get, list) - Any authenticated user can get or list favorite visitors.
-     * @allow (update, delete) - Authenticated user can update and delete any favorite visitor.
-     * @principle Allows open read and write access.
+     * @allow (create) Any authenticated user can create favorite visitor information.
+     * @allow (read, write) Any authenticated user can read and write favorite visitor information.
+     * @principle Open write access for prototyping.
      */
     match /favorite_visitors/{favoriteVisitorId} {
-      allow get, list: if isSignedIn();
+      allow get, list: if true;
       allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
+      allow update: if isSignedIn() && resource != null;
+      allow delete: if isSignedIn() && resource != null;
     }
 
     /**
-     * @description Secures the list of users currently in the office ('whiteboard'). Read access is public for authenticated users, but write access is restricted.
+     * @description Allows read access to users inside the office. Writes should be done by a trusted backend.
      * @path /usuaris_dins/{usuariId}
-     * @allow (get, list) - Any signed-in user can view who is currently in the office.
-     * @deny (create, update, delete) - No client-side creation, update, or deletion allowed.
-     * @principle Public read access for a real-time information board; backend-only writes.
+     * @allow (read) Any authenticated user can read this "whiteboard" data.
+     * @deny (write) Only a trusted backend should write to this collection.
+     * @principle Open read access for the "whiteboard" collection.
      */
     match /usuaris_dins/{usuariId} {
       allow get, list: if isSignedIn();
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow create: if false; // Only trusted backend can create.
+      allow update: if false && resource != null; // Only trusted backend can update.
+      allow delete: if false && resource != null; // Only trusted backend can delete.
     }
 
-    /**
-     * @description Secures the employee directory.
+      /**
+     * @description Allows read access to employee directory information. Writes should be done by a trusted backend.
      * @path /directori/{directoriId}
-     * @allow (create) - Authenticated user can create a directory entry.
-     * @allow (get, list) - Any authenticated user can get or list directory entries.
-     * @allow (update, delete) - Authenticated user can update and delete any directory entry.
-     * @principle Allows open read and write access.
+     * @allow (read) Any authenticated user can read the directory.
+     * @deny (write) Only a trusted backend should write to the directory.
+     * @principle Open read access for the directory collection.
      */
     match /directori/{directoriId} {
       allow get, list: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
+      allow create: if false; // Only trusted backend can create.
+      allow update: if false && resource != null; // Only trusted backend can update.
+      allow delete: if false && resource != null; // Only trusted backend can delete.
     }
 
-    // ---- Helper functions ----
+
     function isSignedIn() {
       return request.auth != null;
-    }
-
-    function isOwner(userId) {
-      return request.auth.uid == userId;
-    }
-
-    function isExistingOwner(userId) {
-      return isOwner(userId) && resource != null;
     }
   }
 }
