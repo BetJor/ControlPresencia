@@ -23,7 +23,7 @@ import {
 } from '@/firebase';
 import type { VisitRegistration, UsuariDins, Directori } from '@/lib/types';
 import { collection, query, where, doc } from 'firebase/firestore';
-import { Contact, Users, User, Loader2, LogOut } from 'lucide-react';
+import { Contact, Users, User, Loader2, LogOut, Repeat } from 'lucide-react';
 import {
   Accordion,
   AccordionContent,
@@ -92,6 +92,7 @@ export default function PresentPeopleList() {
         // Fallback to the data from `usuaris_dins` if no details are found in `directori`
         nom: details?.nom ?? present.nom,
         cognom: details?.cognom ?? present.cognoms ?? '',
+        nombreMoviments: present.nombreMoviments || 0,
       };
     }).sort((a, b) => {
         const timeA = a.horaDarreraEntrada?.toDate().getTime() || 0;
@@ -232,7 +233,18 @@ export default function PresentPeopleList() {
                         <TableRow>
                           <TableHead className="py-2 px-3">Cognoms</TableHead>
                           <TableHead className="py-2 px-3">Nom</TableHead>
-                          <TableHead className="py-2 px-3">Identificador</TableHead>
+                          <TableHead className="py-2 px-3">ID</TableHead>
+                          <TableHead className="py-2 px-3 text-center">
+                            <Tooltip>
+                              <TooltipTrigger className='flex items-center gap-1'>
+                                <Repeat className="h-4 w-4" />
+                                <span>#</span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Nombre de moviments</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TableHead>
                           <TableHead className="py-2 px-3">Darrera Entrada</TableHead>
                           <TableHead className="text-right py-2 px-3">Accions</TableHead>
                         </TableRow>
@@ -245,6 +257,7 @@ export default function PresentPeopleList() {
                             </TableCell>
                             <TableCell className="py-2 px-3">{employee.nom}</TableCell>
                             <TableCell className="py-2 px-3">{employee.id}</TableCell>
+                            <TableCell className="py-2 px-3 text-center">{employee.nombreMoviments}</TableCell>
                             <TableCell className="py-2 px-3">{getFormattedDateTime(employee.horaDarreraEntrada)}</TableCell>
                              <TableCell className="text-right py-2 px-3">
                               <Tooltip>

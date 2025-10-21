@@ -253,6 +253,7 @@ exports.sincronitzarPersonalPresent = functions
             horaDarreraEntrada: Timestamp.fromDate(lastPunch.parsedDate),
             nomOriginal: lastPunch.Nombre || '',
             cognomsOriginal: lastPunch.Apellidos || '',
+            nombreMoviments: punches.length,
           };
         }
       }
@@ -288,6 +289,7 @@ exports.sincronitzarPersonalPresent = functions
                 horaDarreraEntrada: presentUsers[userId].horaDarreraEntrada,
                 nom: userInfo?.nom || presentUsers[userId].nomOriginal,
                 cognoms: userInfo?.cognom || presentUsers[userId].cognomsOriginal,
+                nombreMoviments: presentUsers[userId].nombreMoviments,
             };
             const docRef = usuarisDinsCollection.doc(userId);
             batch.set(docRef, dataToSet, { merge: true });
