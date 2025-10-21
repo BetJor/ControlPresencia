@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
-import { collection, query, where, orderBy, limit, startAfter, QueryDocumentSnapshot, DocumentData, OrderByDirection } from "firebase/firestore";
-import { Loader2, BookUser, Mail, Phone, Search, ChevronsUpDown, Check, XIcon, ChevronLeft, ChevronRight, ArrowUp, ArrowDown } from "lucide-react";
+import { collection, query, where, orderBy } from "firebase/firestore";
+import { Loader2, BookUser, Mail, Phone, Search, ChevronsUpDown, Check, XIcon, ArrowUp, ArrowDown } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Input } from '@/components/ui/input';
@@ -15,8 +15,8 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { cn } from "@/lib/utils";
 import type { Directori } from "@/lib/types";
 
-const PAGE_SIZE = 15;
 type SortKey = 'nom' | 'cognom' | 'centreCost';
+type SortDirection = 'asc' | 'desc';
 
 type Department = {
     id: string;
@@ -29,10 +29,8 @@ export default function DirectoryPage() {
     const [departmentFilter, setDepartmentFilter] = useState('');
     const [departmentOpen, setDepartmentOpen] = useState(false);
     
-    const [paginationCursors, setPaginationCursors] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]);
-    const [currentPage, setCurrentPage] = useState(0);
-
-    const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: OrderByDirection }>({ key: 'nom', direction: 'asc' });
+    const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'nom', direction: 'asc' });
+    const [hasSearched, setHasSearched] = useState(false);
 
     const departmentsCollection = useMemoFirebase(() => {
         if (!firestore) return null;
@@ -47,65 +45,45 @@ export default function DirectoryPage() {
             }
             return { key, direction: 'asc' };
         });
-        setCurrentPage(0);
-        setPaginationCursors([null]);
     };
 
-    const baseQuery = useMemoFirebase(() => {
-        if (!firestore) return null;
-        let q = collection(firestore, 'directori');
-        
-        const filters = [];
-        if (departmentFilter) {
-            filters.push(where('departament', '==', departmentFilter));
-        }
-
-        if (filters.length > 0) {
-            return query(q, ...filters);
-        }
-
-        return q;
-    }, [firestore, departmentFilter]);
-
-
     const nameSearchTerm = nameFilter.trim().toLowerCase();
+    
     const nameFilterQuery = useMemoFirebase(() => {
-        if (!firestore || !baseQuery || !nameSearchTerm) return null;
-         const searchTermCapitalized = nameSearchTerm.charAt(0).toUpperCase() + nameSearchTerm.slice(1);
+        if (!firestore || !nameSearchTerm) return null;
+        const searchTermCapitalized = nameSearchTerm.charAt(0).toUpperCase() + nameSearchTerm.slice(1);
         return query(
-            baseQuery, 
+            collection(firestore, 'directori'), 
             orderBy('nom'), 
             where('nom', '>=', searchTermCapitalized), 
             where('nom', '<=', searchTermCapitalized + '\uf8ff')
         );
-    }, [firestore, baseQuery, nameSearchTerm]);
+    }, [firestore, nameSearchTerm]);
 
     const lastNameFilterQuery = useMemoFirebase(() => {
-        if (!firestore || !baseQuery || !nameSearchTerm) return null;
+        if (!firestore || !nameSearchTerm) return null;
         const searchTermCapitalized = nameSearchTerm.charAt(0).toUpperCase() + nameSearchTerm.slice(1);
         return query(
-            baseQuery,
+            collection(firestore, 'directori'),
             orderBy('cognom'),
             where('cognom', '>=', searchTermCapitalized),
             where('cognom', '<=', searchTermCapitalized + '\uf8ff')
         );
-    }, [firestore, baseQuery, nameSearchTerm]);
-    
-    const paginatedQuery = useMemoFirebase(() => {
-        if (!firestore || !baseQuery || nameSearchTerm) return null; 
+    }, [firestore, nameSearchTerm]);
+
+    const departmentQuery = useMemoFirebase(() => {
+        if (!firestore || !departmentFilter || nameSearchTerm) return null;
         return query(
-            baseQuery,
-            orderBy(sortConfig.key, sortConfig.direction),
-            startAfter(paginationCursors[currentPage] || 0),
-            limit(PAGE_SIZE + 1)
+            collection(firestore, 'directori'),
+            where('departament', '==', departmentFilter),
+            orderBy(sortConfig.key, sortConfig.direction)
         );
-    }, [firestore, baseQuery, nameSearchTerm, currentPage, paginationCursors, sortConfig]);
+    }, [firestore, departmentFilter, nameSearchTerm, sortConfig]);
 
-
-    const { data: paginatedEmployeesData, isLoading: isLoadingPaginated, error: paginatedError, snapshot: paginatedSnapshot } = useCollection<Directori>(paginatedQuery);
     const { data: nameFilteredEmployees, isLoading: isLoadingName } = useCollection<Directori>(nameFilterQuery);
     const { data: lastNameFilteredEmployees, isLoading: isLoadingLastName } = useCollection<Directori>(lastNameFilterQuery);
-
+    const { data: departmentFilteredEmployees, isLoading: isLoadingDeptResults } = useCollection<Directori>(departmentQuery);
+    
     const employees = useMemo(() => {
         if (nameSearchTerm) {
             const resultsMap = new Map<string, Directori>();
@@ -120,38 +98,36 @@ export default function DirectoryPage() {
                 return sortConfig.direction === 'asc' ? comparison : -comparison;
             });
         }
-        return paginatedEmployeesData?.slice(0, PAGE_SIZE) ?? [];
-    }, [nameSearchTerm, paginatedEmployeesData, nameFilteredEmployees, lastNameFilteredEmployees, sortConfig]);
-
-    const hasNextPage = !nameSearchTerm && (paginatedEmployeesData?.length ?? 0) > PAGE_SIZE;
-    const hasPrevPage = !nameSearchTerm && currentPage > 0;
-    
-    const handleNextPage = () => {
-        if (hasNextPage && paginatedSnapshot) {
-            const lastVisibleDoc = paginatedSnapshot.docs[paginatedSnapshot.docs.length - 2];
-            setPaginationCursors(prev => {
-                const newCursors = [...prev];
-                newCursors[currentPage + 1] = lastVisibleDoc;
-                return newCursors;
-            });
-            setCurrentPage(prev => prev + 1);
+        if (departmentFilter) {
+            return departmentFilteredEmployees ?? [];
         }
-    };
+        return [];
+    }, [nameSearchTerm, nameFilteredEmployees, lastNameFilteredEmployees, departmentFilter, departmentFilteredEmployees, sortConfig]);
 
-    const handlePrevPage = () => {
-        if (hasPrevPage) {
-            setCurrentPage(prev => prev - 1);
+    const handleSearch = () => {
+        setHasSearched(true);
+    };
+    
+    const handleDepartmentSelect = (depName: string) => {
+        const newFilter = depName === departmentFilter ? "" : depName;
+        setDepartmentFilter(newFilter);
+        setDepartmentOpen(false);
+        if (newFilter) {
+            setNameFilter(''); // Clear name filter when dept filter is applied
+            setHasSearched(true);
+        } else {
+            setHasSearched(false);
         }
     };
     
-    useEffect(() => {
-        setCurrentPage(0);
-        setPaginationCursors([null]);
-    }, [nameFilter, departmentFilter, sortConfig]);
+    const clearFilters = () => {
+        setNameFilter('');
+        setDepartmentFilter('');
+        setHasSearched(false);
+    }
 
-
-    const currentDepartment = departments?.find(dep => dep.name === departmentFilter)
-    const effectiveIsLoading = isLoadingPaginated || isLoadingDepts || isLoadingName || isLoadingLastName;
+    const currentDepartment = departments?.find(dep => dep.name === departmentFilter);
+    const effectiveIsLoading = isLoadingDepts || isLoadingName || isLoadingLastName || isLoadingDeptResults;
 
     const renderSortArrow = (key: SortKey) => {
         if (sortConfig.key === key) {
@@ -159,6 +135,8 @@ export default function DirectoryPage() {
         }
         return null;
     };
+    
+    const showResults = hasSearched && (nameSearchTerm || departmentFilter);
 
     return (
         <Card>
@@ -172,25 +150,20 @@ export default function DirectoryPage() {
             <CardContent>
                 <div className="flex flex-col md:flex-row items-center gap-4 mb-6">
                      <div className="relative w-full md:w-1/2 flex items-center gap-2">
-                        <div className="relative w-full">
+                        <form className="relative w-full" onSubmit={(e) => { e.preventDefault(); handleSearch(); }}>
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input
                                 placeholder="Buscar por nombre o apellido..."
                                 value={nameFilter}
-                                onChange={(e) => setNameFilter(e.target.value)}
+                                onChange={(e) => {
+                                    setNameFilter(e.target.value);
+                                    if(departmentFilter) setDepartmentFilter('');
+                                    if(!e.target.value) setHasSearched(false);
+                                }}
                                 className="pl-10"
                             />
-                             {nameFilter && (
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => setNameFilter('')}
-                                    className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8"
-                                >
-                                    <XIcon className="h-4 w-4" />
-                                </Button>
-                            )}
-                        </div>
+                            <Button type="submit" className="sr-only">Buscar</Button>
+                        </form>
                     </div>
                      <div className="w-full md:w-1/2 flex items-center gap-2">
                         <Popover open={departmentOpen} onOpenChange={setDepartmentOpen}>
@@ -209,19 +182,14 @@ export default function DirectoryPage() {
                             </PopoverTrigger>
                             <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
                                 <Command>
-                                    <CommandInput 
-                                      placeholder="Buscar departamento..." 
-                                    />
+                                    <CommandInput placeholder="Buscar departamento..." />
                                     <CommandList>
                                         <CommandEmpty>No se encontró el departamento.</CommandEmpty>
                                         <CommandGroup>
                                              <CommandItem
                                                 key="all-departments"
                                                 value=""
-                                                onSelect={() => {
-                                                    setDepartmentFilter("");
-                                                    setDepartmentOpen(false);
-                                                }}
+                                                onSelect={() => handleDepartmentSelect("")}
                                              >
                                                 <Check className={cn("mr-2 h-4 w-4", departmentFilter === "" ? "opacity-100" : "opacity-0")} />
                                                 Todos los departamentos
@@ -230,11 +198,7 @@ export default function DirectoryPage() {
                                                 <CommandItem
                                                     key={dep.id}
                                                     value={dep.name}
-                                                    onSelect={(currentValue) => {
-                                                        const newFilter = dep.name === departmentFilter ? "" : dep.name;
-                                                        setDepartmentFilter(newFilter);
-                                                        setDepartmentOpen(false);
-                                                    }}
+                                                    onSelect={() => handleDepartmentSelect(dep.name)}
                                                 >
                                                     <Check className={cn("mr-2 h-4 w-4", departmentFilter === dep.name ? "opacity-100" : "opacity-0")} />
                                                     {dep.name}
@@ -245,27 +209,26 @@ export default function DirectoryPage() {
                                 </Command>
                             </PopoverContent>
                         </Popover>
-                        {departmentFilter && (
-                            <Button variant="ghost" size="icon" onClick={() => setDepartmentFilter('')}>
-                                <XIcon className="h-4 w-4" />
-                            </Button>
-                        )}
                     </div>
                 </div>
+                 {(nameFilter || departmentFilter) && (
+                    <div className="mb-4 text-right">
+                        <Button variant="ghost" onClick={clearFilters}>
+                            <XIcon className="h-4 w-4 mr-2" />
+                            Limpiar filtros
+                        </Button>
+                    </div>
+                )}
 
-                {effectiveIsLoading && (!employees || employees.length === 0) ? (
+
+                {effectiveIsLoading ? (
                     <div className="flex items-center justify-center py-8">
                         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                        <p className="ml-2">Cargando directorio...</p>
+                        <p className="ml-2">Buscando empleados...</p>
                     </div>
-                ) : employees && employees.length > 0 ? (
+                ) : showResults && employees.length > 0 ? (
                     <>
                     <div className="relative">
-                        {effectiveIsLoading && (
-                          <div className="absolute inset-0 bg-background/50 flex items-center justify-center z-10">
-                            <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                          </div>
-                        )}
                         <Table>
                             <TableHeader>
                                 <TableRow>
@@ -325,32 +288,14 @@ export default function DirectoryPage() {
                             </TableBody>
                         </Table>
                     </div>
-                    {!nameSearchTerm && (
-                         <div className="flex justify-end items-center gap-2 pt-4">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={handlePrevPage}
-                                disabled={!hasPrevPage || effectiveIsLoading}
-                            >
-                                <ChevronLeft className="h-4 w-4 mr-1" />
-                                Anterior
-                            </Button>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={handleNextPage}
-                                disabled={!hasNextPage || effectiveIsLoading}
-                            >
-                                Siguiente
-                                <ChevronRight className="h-4 w-4 ml-1" />
-                            </Button>
-                        </div>
-                    )}
                     </>
-                ) : (
+                ) : hasSearched ? (
                     <div className="text-center text-muted-foreground py-8">
                          <p>No se han encontrado empleados que coincidan con la búsqueda.</p>
+                    </div>
+                ) : (
+                    <div className="text-center text-muted-foreground py-8">
+                         <p>Utiliza los filtros de arriba para buscar en el directorio de empleados.</p>
                     </div>
                 )}
             </CardContent>
