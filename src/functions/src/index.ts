@@ -22,40 +22,52 @@ const httpsOptions: HttpsOptions = {
 };
 
 exports.searchEmployees = onCall(httpsOptions, async (request) => {
-    const searchTerm = request.data.searchTerm as string;
-    const department = request.data.department as string;
+    const searchTerm = request.data.searchTerm as string | undefined;
+    const department = request.data.department as string | undefined;
 
     if (!searchTerm && !department) {
-        throw new functions.https.HttpsError('invalid-argument', 'El terme de cerca o el departament són necessaris.');
+        // En lloc de llençar un error, retornem una llista buida si no hi ha filtres.
+        // La lògica del client hauria d'impedir cerques buides.
+        return [];
     }
 
     const db = getFirestore();
     const searchTermLower = searchTerm ? searchTerm.toLowerCase() : '';
 
     try {
-        const directoriRef = db.collection('directori');
-        const snapshot = await directoriRef.get();
+        let query: FirebaseFirestore.Query<FirebaseFirestore.DocumentData> = db.collection('directori');
+        
+        // No podem fer consultes complexes de text directament a Firestore sense índexs específics.
+        // La millor aproximació és obtenir els documents i filtrar-los al servidor.
+        // Si el departament està present, el podem utilitzar per a una consulta inicial més eficient.
+        if (department) {
+            query = query.where('departament', '==', department);
+        }
+
+        const snapshot = await query.get();
         
         const employees: any[] = [];
         snapshot.forEach(doc => {
             const data = doc.data();
-            const nom = data.nom ? data.nom.toLowerCase() : '';
-            const cognom = data.cognom ? data.cognom.toLowerCase() : '';
-            const dep = data.departament || '';
-
-            const nameMatch = searchTerm ? (nom.includes(searchTermLower) || cognom.includes(searchTermLower)) : true;
-            const departmentMatch = department ? dep === department : true;
-
-            if (nameMatch && departmentMatch) {
+            
+            // Si hi ha un terme de cerca, filtrem per nom/cognom.
+            if (searchTerm) {
+                const nom = data.nom ? data.nom.toLowerCase() : '';
+                const cognom = data.cognom ? data.cognom.toLowerCase() : '';
+                if (nom.includes(searchTermLower) || cognom.includes(searchTermLower)) {
+                    employees.push({ ...data, id: doc.id });
+                }
+            } else {
+                // Si no hi ha terme de cerca (però sí departament), afegim tothom.
                 employees.push({ ...data, id: doc.id });
             }
         });
         
-        return employees.slice(0, 50); // Limitar resultados
+        return employees.slice(0, 100); // Limitem els resultats per seguretat i rendiment
 
     } catch (error) {
         console.error("Error a la funció searchEmployees:", error);
-        throw new functions.https.HttpsError('internal', 'No s\'han pogut buscar els empleats.');
+        throw new functions.https.HttpsError('internal', 'No s\'han pogut buscar els empleats a causa d\'un error intern.');
     }
 });
 
@@ -410,4 +422,5 @@ exports.sincronitzarPersonalPresent = functions
       return null;
     }
   });
+
 

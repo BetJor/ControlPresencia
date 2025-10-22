@@ -48,6 +48,41 @@ const runtimeOptions = {
     memory: '1GB'
 };
 const region = 'europe-west1';
+const httpsOptions = {
+    region,
+    memory: "1GiB",
+    timeoutSeconds: 60
+};
+exports.searchEmployees = (0, https_1.onCall)(httpsOptions, async (request) => {
+    const searchTerm = request.data.searchTerm;
+    const department = request.data.department;
+    if (!searchTerm && !department) {
+        throw new functions.https.HttpsError('invalid-argument', 'El terme de cerca o el departament són necessaris.');
+    }
+    const db = (0, firestore_1.getFirestore)();
+    const searchTermLower = searchTerm ? searchTerm.toLowerCase() : '';
+    try {
+        const directoriRef = db.collection('directori');
+        const snapshot = await directoriRef.get();
+        const employees = [];
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            const nom = data.nom ? data.nom.toLowerCase() : '';
+            const cognom = data.cognom ? data.cognom.toLowerCase() : '';
+            const dep = data.departament || '';
+            const nameMatch = searchTerm ? (nom.includes(searchTermLower) || cognom.includes(searchTermLower)) : true;
+            const departmentMatch = department ? dep === department : true;
+            if (nameMatch && departmentMatch) {
+                employees.push(Object.assign(Object.assign({}, data), { id: doc.id }));
+            }
+        });
+        return employees.slice(0, 50); // Limitar resultados
+    }
+    catch (error) {
+        console.error("Error a la funció searchEmployees:", error);
+        throw new functions.https.HttpsError('internal', 'No s\'han pogut buscar els empleats.');
+    }
+});
 exports.importarUsuarisAGooleWorkspace = functions
     .region(region)
     .runWith(runtimeOptions)
@@ -176,11 +211,6 @@ exports.importarUsuarisAGooleWorkspace = functions
         return null;
     }
 });
-const httpsOptions = {
-    region,
-    memory: "1GiB",
-    timeoutSeconds: 60
-};
 exports.getDadesAppSheet = (0, https_1.onCall)(httpsOptions, async (request) => {
     const APP_ID = "94c06d4b-4ed0-49d4-85a9-003710c7038b";
     const APP_ACCESS_KEY = "V2-LINid-jygnH-4Eqx6-xEe13-kXpTW-ZALoX-yY7yc-q9EMj";

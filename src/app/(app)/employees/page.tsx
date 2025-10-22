@@ -1,6 +1,7 @@
+
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useFirebaseApp, useFirestore, useMemoFirebase } from "@/firebase";
@@ -46,20 +47,20 @@ export default function DirectoryPage() {
     }, [firestore]);
     const { data: departments, isLoading: isLoadingDepts } = useCollection<Department>(departmentsCollection);
     
-    const handleSort = (key: SortKey) => {
-        let direction: SortDirection = 'asc';
-        if (sortConfig.key === key && sortConfig.direction === 'asc') {
-            direction = 'desc';
-        }
-        setSortConfig({ key, direction });
-
-        const sortedEmployees = [...employees].sort((a, b) => {
-            const aVal = a[key] || '';
-            const bVal = b[key] || '';
-            const comparison = String(aVal).localeCompare(String(bVal));
-            return direction === 'asc' ? comparison : -comparison;
+    const sortEmployees = (employeesToSort: Directori[], config: { key: SortKey; direction: SortDirection }) => {
+        return [...employeesToSort].sort((a, b) => {
+            const aVal = a[config.key] || '';
+            const bVal = b[config.key] || '';
+            const comparison = String(aVal).localeCompare(String(bVal), 'es', { sensitivity: 'base' });
+            return config.direction === 'asc' ? comparison : -comparison;
         });
-        setEmployees(sortedEmployees);
+    };
+
+    const handleSort = (key: SortKey) => {
+        const newDirection = (sortConfig.key === key && sortConfig.direction === 'asc') ? 'desc' : 'asc';
+        const newSortConfig = { key, direction: newDirection };
+        setSortConfig(newSortConfig);
+        setEmployees(prev => sortEmployees(prev, newSortConfig));
     };
     
     const performSearch = async () => {
@@ -80,7 +81,6 @@ export default function DirectoryPage() {
 
         setIsLoading(true);
         setHasSearched(true);
-        setEmployees([]);
 
         try {
             const functions = getFunctions(app, 'europe-west1');
@@ -91,14 +91,7 @@ export default function DirectoryPage() {
             });
             
             const fetchedEmployees = result.data as Directori[];
-
-            const sorted = fetchedEmployees.sort((a,b) => {
-                const aVal = a[sortConfig.key] || '';
-                const bVal = b[sortConfig.key] || '';
-                const comparison = String(aVal).localeCompare(String(bVal));
-                return sortConfig.direction === 'asc' ? comparison : -comparison;
-            });
-            setEmployees(sorted);
+            setEmployees(sortEmployees(fetchedEmployees, sortConfig));
 
         } catch (error) {
             console.error("Error searching employees:", error);
@@ -106,7 +99,7 @@ export default function DirectoryPage() {
              toast({
                 variant: "destructive",
                 title: "Error de búsqueda",
-                description: "Ocurrió un error al buscar. Revisa las reglas de seguridad de Firestore si el problema persiste.",
+                description: "Ocurrió un error al buscar. Revisa los permisos de la función o la conexión.",
             });
         } finally {
             setIsLoading(false);
