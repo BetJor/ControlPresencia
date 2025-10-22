@@ -12,7 +12,6 @@ import {
     AccordionTrigger,
   } from "@/components/ui/accordion"
 import { useToast } from '@/hooks/use-toast';
-import { mockEmployees } from '@/lib/mock-data';
 import { Contact, Edit, Fingerprint, UserPlus, Check, ChevronsUpDown, Star } from 'lucide-react';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -21,9 +20,9 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { cn } from "@/lib/utils";
 import { Card, CardTitle } from "@/components/ui/card";
 import { useFirestore, useUser, addDocumentNonBlocking, useCollection, useMemoFirebase, setDocumentNonBlocking } from "@/firebase";
-import { collection, serverTimestamp, doc } from "firebase/firestore";
+import { collection, serverTimestamp, doc, query, orderBy } from "firebase/firestore";
 import { Loader2 } from "lucide-react";
-import type { Employee } from "@/lib/types";
+import type { Directori } from "@/lib/types";
 
 type FavoriteVisitor = {
     id: string;
@@ -49,6 +48,13 @@ export default function PunchClock() {
     return collection(firestore, 'favorite_visitors');
   }, [firestore]);
 
+  const directoryCollection = useMemoFirebase(() => {
+      if (!firestore) return null;
+      return query(collection(firestore, 'directori'), orderBy('cognom'), orderBy('nom'));
+  }, [firestore])
+
+  const { data: employees, isLoading: employeesLoading } = useCollection<Directori>(directoryCollection);
+
   const { data: favoriteVisitors, isLoading: favoritesLoading } = useCollection<FavoriteVisitor>(favoriteVisitorsCollection);
 
   React.useEffect(() => {
@@ -73,23 +79,23 @@ export default function PunchClock() {
         return;
     }
 
-    const selectedEmployee = mockEmployees.find((employee) => employee.id === employeeValue);
+    const selectedEmployee = employees?.find((employee) => employee.id === employeeValue);
 
     if (selectedEmployee) {
         const employeeDocRef = doc(firestore, 'usuaris_dins', selectedEmployee.id);
         const employeeData = {
-            nom: selectedEmployee.firstName,
-            cognoms: selectedEmployee.lastName,
+            nom: selectedEmployee.nom,
+            cognoms: selectedEmployee.cognom,
             horaDarreraEntrada: serverTimestamp(),
+            nombreMoviments: 1, // Se asume que es el primer movimiento del día al ser manual
+            darrerTerminal: 'MANUAL',
         };
 
-        // We use setDocumentNonBlocking here to create or overwrite the document with the employee's ID.
-        // This ensures that if they punch in again, their entry time is updated, and we get rich errors on failure.
         setDocumentNonBlocking(employeeDocRef, employeeData, { merge: false });
         
         toast({
             title: 'Entrada Manual Registrada',
-            description: `S'ha registrat l'entrada per a ${selectedEmployee.firstName} ${selectedEmployee.lastName}.`,
+            description: `S'ha registrat l'entrada per a ${selectedEmployee.nom} ${selectedEmployee.cognom}.`,
         });
         setEmployeeValue(""); // Reset dropdown
     }
@@ -115,7 +121,6 @@ export default function PunchClock() {
         addDocumentNonBlocking(visitsCollection, visitData);
 
         if (isFavorite) {
-          // Check if the visitor is already a favorite to avoid duplicates
           const isAlreadyFavorite = favoriteVisitors?.some(
             (fav) => fav.name.toLowerCase() === visitorName.toLowerCase() && fav.company.toLowerCase() === visitorCompany.toLowerCase()
           );
@@ -135,7 +140,6 @@ export default function PunchClock() {
           description: 'La entrada de la visita ha sido registrada con éxito.',
         });
 
-        // Reset fields
         setVisitorName("");
         setVisitorCompany("");
         setIsFavorite(false);
@@ -148,7 +152,7 @@ export default function PunchClock() {
     }
   }
 
-  const isLoading = isUserLoading || favoritesLoading;
+  const isLoading = isUserLoading || favoritesLoading || employeesLoading;
 
   return (
     <Card>
@@ -184,35 +188,37 @@ export default function PunchClock() {
                                             disabled={isLoading}
                                         >
                                             {employeeValue
-                                            ? mockEmployees.find((employee) => employee.id === employeeValue)?.firstName + ' ' + mockEmployees.find((employee) => employee.id === employeeValue)?.lastName
+                                            ? employees?.find((employee) => employee.id === employeeValue)?.nom + ' ' + employees?.find((employee) => employee.id === employeeValue)?.cognom
                                             : "Seleccionar empleado..."}
                                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                         </Button>
                                         </PopoverTrigger>
-                                        <PopoverContent className="w-[200px] p-0">
+                                        <PopoverContent className="w-[300px] p-0">
                                         <Command>
                                             <CommandInput placeholder="Buscar empleado..." />
-                                            <CommandEmpty>No se encontró el empleado.</CommandEmpty>
-                                            <CommandGroup>
-                                            {mockEmployees.map((employee: Employee) => (
-                                                <CommandItem
-                                                key={employee.id}
-                                                value={employee.id}
-                                                onSelect={(currentValue) => {
-                                                    setEmployeeValue(currentValue === employeeValue ? "" : currentValue)
-                                                    setEmployeeOpen(false)
-                                                }}
-                                                >
-                                                <Check
-                                                    className={cn(
-                                                    "mr-2 h-4 w-4",
-                                                    employeeValue === employee.id ? "opacity-100" : "opacity-0"
-                                                    )}
-                                                />
-                                                {employee.firstName} {employee.lastName}
-                                                </CommandItem>
-                                            ))}
-                                            </CommandGroup>
+                                            <CommandList>
+                                                <CommandEmpty>No se encontró el empleado.</CommandEmpty>
+                                                <CommandGroup>
+                                                {employees?.map((employee: Directori) => (
+                                                    <CommandItem
+                                                    key={employee.id}
+                                                    value={employee.id}
+                                                    onSelect={(currentValue) => {
+                                                        setEmployeeValue(currentValue === employeeValue ? "" : currentValue)
+                                                        setEmployeeOpen(false)
+                                                    }}
+                                                    >
+                                                    <Check
+                                                        className={cn(
+                                                        "mr-2 h-4 w-4",
+                                                        employeeValue === employee.id ? "opacity-100" : "opacity-0"
+                                                        )}
+                                                    />
+                                                    {employee.cognom}, {employee.nom}
+                                                    </CommandItem>
+                                                ))}
+                                                </CommandGroup>
+                                            </CommandList>
                                         </Command>
                                         </PopoverContent>
                                     </Popover>
@@ -232,7 +238,7 @@ export default function PunchClock() {
                                 {isLoading ? (
                                      <div className="flex items-center justify-center p-4">
                                         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                                        <p className="ml-2">Cargando favoritos...</p>
+                                        <p className="ml-2">Cargando...</p>
                                      </div>
                                 ) : (
                                 <>
@@ -320,3 +326,5 @@ export default function PunchClock() {
     </Card>
   );
 }
+
+    

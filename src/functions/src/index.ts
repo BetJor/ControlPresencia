@@ -10,13 +10,12 @@ initializeApp();
 
 const runtimeOptions: functions.RuntimeOptions = {
     timeoutSeconds: 540,
-    memory: '1GB',
-    secrets: ["APPSHEET_APP_ACCESS_KEY"]
+    memory: '1GB'
 };
 
 const region = 'europe-west1';
 
-exports.importarUsuarisAGoogleWorkspace = functions
+exports.importarUsuarisAGooleWorkspace = functions
   .region(region)
   .runWith(runtimeOptions)
   .pubsub.schedule('every 24 hours')
@@ -167,13 +166,12 @@ exports.importarUsuarisAGoogleWorkspace = functions
 const httpsOptions: HttpsOptions = {
     region,
     memory: "1GiB",
-    timeoutSeconds: 60,
-    secrets: ["APPSHEET_APP_ACCESS_KEY"]
+    timeoutSeconds: 60
 };
 
 exports.getDadesAppSheet = onCall(httpsOptions, async (request) => {
   const APP_ID = "94c06d4b-4ed0-49d4-85a9-003710c7038b";
-  const APP_ACCESS_KEY = process.env.APPSHEET_APP_ACCESS_KEY; 
+  const APP_ACCESS_KEY = "V2-LINid-jygnH-4Eqx6-xEe13-kXpTW-ZALoX-yY7yc-q9EMj"; 
 
   const url = `https://api.appsheet.com/api/v2/apps/${APP_ID}/tables/dbo.Google_EntradasSalidas/Action`;
 
@@ -187,7 +185,7 @@ exports.getDadesAppSheet = onCall(httpsOptions, async (request) => {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'ApplicationAccessKey': APP_ACCESS_KEY!
+      'ApplicationAccessKey': APP_ACCESS_KEY
     },
     body: body
   });
@@ -212,7 +210,7 @@ exports.sincronitzarPersonalPresent = functions
     console.log("TRACE: Iniciant la sincronització de personal present.");
 
     const APP_ID = "94c06d4b-4ed0-49d4-85a9-003710c7038b";
-    const APP_ACCESS_KEY = process.env.APPSHEET_APP_ACCESS_KEY;
+    const APP_ACCESS_KEY = "V2-LINid-jygnH-4Eqx6-xEe13-kXpTW-ZALoX-yY7yc-q9EMj";
     const db = getFirestore();
 
     try {
@@ -222,7 +220,7 @@ exports.sincronitzarPersonalPresent = functions
 
       const response = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'ApplicationAccessKey': APP_ACCESS_KEY! },
+        headers: { 'Content-Type': 'application/json', 'ApplicationAccessKey': APP_ACCESS_KEY },
         body: body
       });
 
@@ -260,25 +258,28 @@ exports.sincronitzarPersonalPresent = functions
           continue;
         }
 
-        // Format: MM/DD/YYYY HH:MM:SS or M/D/YYYY H:M:S
-        const dateTimeParts = dateStr.split(' ');
-        const dateParts = dateTimeParts[0].split('/');
-        const timeParts = dateTimeParts[1].split(':');
+        const parts = dateStr.split(/[\s/:]+/);
+        if(parts.length < 6) continue;
 
-        if (dateParts.length < 3 || timeParts.length < 2) {
-            console.log(`TRACE: Fitxatge ignorat per format de data/hora invàlid: ${dateStr}`);
-            continue;
-        }
+        const year = parseInt(parts[2]);
+        const month = parseInt(parts[0]) - 1;
+        const day = parseInt(parts[1]);
+        const hour = parseInt(parts[3]);
+        const minute = parseInt(parts[4]);
+        const second = parseInt(parts[5]);
+       
+        const testDate = new Date(year, month, day, hour, minute, second);
+        const madridTimeStr = testDate.toLocaleString('en-US', { timeZone: 'Europe/Madrid', hour12: false });
+        const utcTimeStr = testDate.toLocaleString('en-US', { timeZone: 'UTC', hour12: false });
 
-        const month = parseInt(dateParts[0], 10) - 1; // Month is 0-indexed in JS
-        const day = parseInt(dateParts[1], 10);
-        const year = parseInt(dateParts[2], 10);
-        const hours = parseInt(timeParts[0], 10);
-        const minutes = parseInt(timeParts[1], 10);
-        const seconds = timeParts.length > 2 ? parseInt(timeParts[2], 10) : 0;
-        
-        // This creates a date using the local timezone of the function runner, which we've set to 'Europe/Madrid'
-        const date = new Date(year, month, day, hours, minutes, seconds);
+        // Calculate offset in milliseconds
+        const madridMs = new Date(madridTimeStr).getTime();
+        const utcMs = new Date(utcTimeStr).getTime();
+        const offset = madridMs - utcMs;
+
+        // Apply offset to get correct UTC time from Madrid input
+        const date = new Date(Date.UTC(year, month, day, hour, minute, second) - offset);
+                
 
         if (isNaN(date.getTime())) {
             console.log(`TRACE: Fitxatge ignorat per data invàlida després de parsejar: ${dateStr}`);
