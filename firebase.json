@@ -37,6 +37,6 @@
     "singleProjectMode": true
   },
   "firestore": {
-    "rules": "firestore.rules"
+    "rules": "src/functions/firestore.rules"
   }
 }

@@ -1,0 +1,176 @@
+/**
+ * @file Firestore Security Rules
+ * @description This ruleset enforces a role-based access control system with ownership for employee profiles and administrative control over terminals and incident types.
+ *
+ * Data Structure:
+ * - /employees/{employeeId}: Stores employee profiles.  Admins can manage all employee profiles; employees can only manage their own.
+ * - /terminals/{terminalId}: Stores terminal information. Only accessible and manageable by admins.
+ * - /employees/{employeeId}/attendance/{attendanceId}: Stores attendance records. Admins and the associated employee can access these records.
+ * - /incident_types/{incidentTypeId}: Stores incident types. Only accessible and manageable by admins.
+ *
+ * Key Security Decisions:
+ * - Strict ownership for employee profiles, enforced through the `isOwner()` function.
+ * - Administrative control is verified using the `isAdmin()` function, which checks the 'role' field in the employee document.
+ * - No public listing of employees, terminals or incident types. List operations are restricted to authorized users (owners or admins).
+ *
+ * Authorization Independence:
+ * - Employee roles (e.g., 'admin') are stored directly within the employee document itself (/employees/{employeeId}).
+ * - This eliminates the need for costly `get()` calls to a separate roles collection when authorizing requests.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * @description Manages employee profiles. Admins can manage all users, and users can manage only their own profile.
+     * @path /employees/{employeeId}
+     * @allow (create) - If the user is creating their own profile (auth.uid == employeeId).
+     * @allow (get) - If the user is an admin or is requesting their own profile.
+     * @allow (update) - If the user is an admin or the owner of the profile.
+     * @allow (delete) - If the user is an admin or the owner of the profile.
+     * @allow (list) - If the user is an admin.
+     * @deny (create) - If the user is not creating their own profile.
+     * @deny (get) - If the user is not an admin or the owner.
+     * @deny (update) - If the user is not an admin or the owner.
+     * @deny (delete) - If the user is not an admin or the owner.
+     * @principle Enforces document ownership for writes, restricts listing to admins.
+     */
+    match /employees/{employeeId} {
+      // Helpers
+      function isSignedIn() {
+        return request.auth != null;
+      }
+
+      function isOwner(employeeId) {
+        return isSignedIn() && request.auth.uid == employeeId;
+      }
+
+      function isAdmin() {
+        return isSignedIn() && get(/databases/$(database)/documents/employees/$(request.auth.uid)).data.role == 'admin';
+      }
+
+      function isExistingOwner(employeeId) {
+          return isOwner(employeeId) && resource != null;
+      }
+
+      // Permissions
+      allow create: if isOwner(employeeId);
+      allow get: if isOwner(employeeId) || isAdmin();
+      allow list: if isAdmin();
+      allow update: if isExistingOwner(employeeId) || isAdmin();
+      allow delete: if isExistingOwner(employeeId) || isAdmin();
+    }
+
+    /**
+     * @description Manages terminal information. Only accessible by administrators.
+     * @path /terminals/{terminalId}
+     * @allow (create) - If the user is an admin.
+     * @allow (get) - If the user is an admin.
+     * @allow (update) - If the user is an admin.
+     * @allow (delete) - If the user is an admin.
+     * @allow (list) - If the user is an admin.
+     * @deny (create) - If the user is not an admin.
+     * @deny (get) - If the user is not an admin.
+     * @deny (update) - If the user is not an admin.
+     * @deny (delete) - If the user is not an admin.
+     * @principle Restricts all access to administrators.
+     */
+    match /terminals/{terminalId} {
+      // Helpers
+      function isSignedIn() {
+        return request.auth != null;
+      }
+
+      function isAdmin() {
+        return isSignedIn() && get(/databases/$(database)/documents/employees/$(request.auth.uid)).data.role == 'admin';
+      }
+
+      function isExistingDocument() {
+          return resource != null;
+      }
+
+      // Permissions
+      allow create: if isAdmin();
+      allow get: if isAdmin();
+      allow list: if isAdmin();
+      allow update: if isAdmin() && isExistingDocument();
+      allow delete: if isAdmin() && isExistingDocument();
+    }
+
+    /**
+     * @description Manages attendance records for each employee. Accessible by admins and the respective employee.
+     * @path /employees/{employeeId}/attendance/{attendanceId}
+     * @allow (create) - If the user is an admin or the owner.
+     * @allow (get) - If the user is an admin or the owner.
+     * @allow (update) - If the user is an admin or the owner.
+     * @allow (delete) - If the user is an admin or the owner.
+     * @allow (list) - If the user is an admin or the owner.
+     * @deny (create) - If the user is not an admin or the owner.
+     * @deny (get) - If the user is not an admin or the owner.
+     * @deny (update) - If the user is not an admin or the owner.
+     * @deny (delete) - If the user is not an admin or the owner.
+     * @principle Enforces ownership or admin access for all operations.
+     */
+    match /employees/{employeeId}/attendance/{attendanceId} {
+      // Helpers
+      function isSignedIn() {
+        return request.auth != null;
+      }
+
+      function isOwner(employeeId) {
+        return isSignedIn() && request.auth.uid == employeeId;
+      }
+
+      function isAdmin() {
+        return isSignedIn() && get(/databases/$(database)/documents/employees/$(request.auth.uid)).data.role == 'admin';
+      }
+
+      function isExistingOwner(employeeId) {
+          return isOwner(employeeId) && resource != null;
+      }
+
+      // Permissions
+      allow create: if isOwner(employeeId) || isAdmin();
+      allow get: if isOwner(employeeId) || isAdmin();
+      allow list: if isOwner(employeeId) || isAdmin();
+      allow update: if isExistingOwner(employeeId) || isAdmin();
+      allow delete: if isExistingOwner(employeeId) || isAdmin();
+    }
+
+    /**
+     * @description Manages incident types. Only accessible by administrators.
+     * @path /incident_types/{incidentTypeId}
+     * @allow (create) - If the user is an admin.
+     * @allow (get) - If the user is an admin.
+     * @allow (update) - If the user is an admin.
+     * @allow (delete) - If the user is an admin.
+     * @allow (list) - If the user is an admin.
+     * @deny (create) - If the user is not an admin.
+     * @deny (get) - If the user is not an admin.
+     * @deny (update) - If the user is not an admin.
+     * @deny (delete) - If the user is not an admin.
+     * @principle Restricts all access to administrators.
+     */
+    match /incident_types/{incidentTypeId} {
+      // Helpers
+      function isSignedIn() {
+        return request.auth != null;
+      }
+
+      function isAdmin() {
+        return isSignedIn() && get(/databases/$(database)/documents/employees/$(request.auth.uid)).data.role == 'admin';
+      }
+
+      function isExistingDocument() {
+          return resource != null;
+      }
+
+      // Permissions
+      allow create: if isAdmin();
+      allow get: if isAdmin();
+      allow list: if isAdmin();
+      allow update: if isAdmin() && isExistingDocument();
+      allow delete: if isAdmin() && isExistingDocument();
+    }
+  }
+}

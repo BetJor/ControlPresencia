@@ -3,10 +3,10 @@
   "description": "Cloud Functions for Firebase",
   "scripts": {
     "build": "tsc",
-    "serve": "npm run build && firebase emulators:start --only functions,pubsub",
+    "serve": "npm run build && firebase emulators:start --only functions,pubsub,firestore",
     "shell": "npm run shell",
     "start": "npm run shell",
-    "deploy": "firebase deploy --only functions",
+    "deploy": "firebase deploy --only functions,firestore:rules",
     "logs": "firebase functions:log"
   },
   "engines": {
