@@ -83,50 +83,25 @@ export default function DirectoryPage() {
         const baseCollection = collection(firestore, 'directori');
         let finalQuery;
 
+        // Apply base filter to avoid permission errors
+        let queries = [where('suspès', '==', false)];
+
         if (departmentFilter) {
-             finalQuery = query(baseCollection, where('departament', '==', departmentFilter));
-        } else if (searchTerm) {
-            // Firestore does not support case-insensitive or partial text search on its own.
-            // We search for names/surnames starting with the term.
-            const endTerm = searchTerm.slice(0, -1) + String.fromCharCode(searchTerm.charCodeAt(searchTerm.length - 1) + 1);
-            finalQuery = query(
-                baseCollection,
-                where('nom', '>=', searchTerm),
-                where('nom', '<', endTerm)
-             );
-        } else {
-             setIsLoading(false);
-             return;
+             queries.push(where('departament', '==', departmentFilter));
         }
+        
+        finalQuery = query(baseCollection, ...queries);
 
         try {
             const querySnapshot = await getDocs(finalQuery);
             let fetchedEmployees = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Directori);
 
-            // If we are searching by name, we also need to search by surname and merge.
-            if (searchTerm && !departmentFilter) {
-                const endTerm = searchTerm.slice(0, -1) + String.fromCharCode(searchTerm.charCodeAt(searchTerm.length - 1) + 1);
-                 const surnameQuery = query(
-                    baseCollection,
-                    where('cognom', '>=', searchTerm),
-                    where('cognom', '<', endTerm)
-                );
-                const surnameSnapshot = await getDocs(surnameQuery);
-                const surnameEmployees = surnameSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Directori);
-                
-                // Merge and remove duplicates
-                const employeeMap = new Map<string, Directori>();
-                fetchedEmployees.forEach(emp => employeeMap.set(emp.id, emp));
-                surnameEmployees.forEach(emp => employeeMap.set(emp.id, emp));
-                fetchedEmployees = Array.from(employeeMap.values());
-            }
-
-            // If both filters are active, filter the department results by name client-side
-            if (departmentFilter && searchTerm) {
+            // Client-side filtering if a name search term is provided
+            if (searchTerm) {
                 const lowercasedSearch = searchTerm.toLowerCase();
                 fetchedEmployees = fetchedEmployees.filter(emp =>
-                    emp.nom.toLowerCase().startsWith(lowercasedSearch) ||
-                    emp.cognom.toLowerCase().startsWith(lowercasedSearch)
+                    emp.nom.toLowerCase().includes(lowercasedSearch) ||
+                    emp.cognom.toLowerCase().includes(lowercasedSearch)
                 );
             }
             

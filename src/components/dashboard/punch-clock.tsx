@@ -20,7 +20,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { cn } from "@/lib/utils";
 import { Card, CardTitle } from "@/components/ui/card";
 import { useFirestore, useUser, addDocumentNonBlocking, useCollection, useMemoFirebase, setDocumentNonBlocking } from "@/firebase";
-import { collection, serverTimestamp, doc, query, orderBy } from "firebase/firestore";
+import { collection, serverTimestamp, doc, query, where, orderBy } from "firebase/firestore";
 import { Loader2 } from "lucide-react";
 import type { Directori } from "@/lib/types";
 
@@ -49,9 +49,12 @@ export default function PunchClock() {
   }, [firestore]);
 
   const directoryCollection = useMemoFirebase(() => {
-      if (!firestore) return null;
-      return query(collection(firestore, 'directori'), orderBy('cognom'), orderBy('nom'));
-  }, [firestore])
+    if (!firestore) return null;
+    // IMPORTANT: Add a where clause to satisfy security rules that prevent full collection scans.
+    // We query for users that are not suspended, which covers all active employees.
+    return query(collection(firestore, 'directori'), where('suspès', '==', false), orderBy('cognom'), orderBy('nom'));
+  }, [firestore]);
+
 
   const { data: employees, isLoading: employeesLoading } = useCollection<Directori>(directoryCollection);
 
@@ -79,11 +82,12 @@ export default function PunchClock() {
         return;
     }
 
-    const selectedEmployee = employees?.find((employee) => employee.id === employeeValue);
+    const selectedEmployee = employees?.find((employee) => employee.centreCost === employeeValue);
 
     if (selectedEmployee) {
-        const employeeDocRef = doc(firestore, 'usuaris_dins', selectedEmployee.id);
+        const employeeDocRef = doc(firestore, 'usuaris_dins', selectedEmployee.centreCost);
         const employeeData = {
+            id: selectedEmployee.centreCost, // Store the ID used for the document
             nom: selectedEmployee.nom,
             cognoms: selectedEmployee.cognom,
             horaDarreraEntrada: serverTimestamp(),
@@ -98,6 +102,12 @@ export default function PunchClock() {
             description: `S'ha registrat l'entrada per a ${selectedEmployee.nom} ${selectedEmployee.cognom}.`,
         });
         setEmployeeValue(""); // Reset dropdown
+    } else {
+         toast({
+            variant: "destructive",
+            title: "Error",
+            description: "No s'ha trobat l'empleat seleccionat.",
+        });
     }
   };
 
@@ -187,8 +197,8 @@ export default function PunchClock() {
                                             className="w-full justify-between"
                                             disabled={isLoading}
                                         >
-                                            {employeeValue
-                                            ? employees?.find((employee) => employee.id === employeeValue)?.nom + ' ' + employees?.find((employee) => employee.id === employeeValue)?.cognom
+                                            {employeeValue && employees
+                                            ? employees?.find((employee) => employee.centreCost === employeeValue)?.nom + ' ' + employees?.find((employee) => employee.centreCost === employeeValue)?.cognom
                                             : "Seleccionar empleado..."}
                                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                         </Button>
@@ -202,7 +212,7 @@ export default function PunchClock() {
                                                 {employees?.map((employee: Directori) => (
                                                     <CommandItem
                                                     key={employee.id}
-                                                    value={employee.id}
+                                                    value={employee.centreCost}
                                                     onSelect={(currentValue) => {
                                                         setEmployeeValue(currentValue === employeeValue ? "" : currentValue)
                                                         setEmployeeOpen(false)
@@ -211,7 +221,7 @@ export default function PunchClock() {
                                                     <Check
                                                         className={cn(
                                                         "mr-2 h-4 w-4",
-                                                        employeeValue === employee.id ? "opacity-100" : "opacity-0"
+                                                        employeeValue === employee.centreCost ? "opacity-100" : "opacity-0"
                                                         )}
                                                     />
                                                     {employee.cognom}, {employee.nom}
@@ -326,5 +336,3 @@ export default function PunchClock() {
     </Card>
   );
 }
-
-    
