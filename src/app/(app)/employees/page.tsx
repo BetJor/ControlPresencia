@@ -80,31 +80,58 @@ export default function DirectoryPage() {
         setHasSearched(true);
         setEmployees([]);
 
-        const baseCollection = collection(firestore, 'directori');
-        let finalQuery;
-
-        // Apply base filter to avoid permission errors
-        let queries = [where('suspès', '==', false)];
-
-        if (departmentFilter) {
-             queries.push(where('departament', '==', departmentFilter));
-        }
-        
-        finalQuery = query(baseCollection, ...queries);
-
         try {
-            const querySnapshot = await getDocs(finalQuery);
-            let fetchedEmployees = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Directori);
+            // Firestore does not support case-insensitive search natively.
+            // A common strategy is to search for a range.
+            const searchTermLower = searchTerm.toLowerCase();
+            const searchTermUpper = searchTermLower + '\uf8ff';
+            
+            const nameQuery = query(
+              collection(firestore, 'directori'),
+              where('nom', '>=', searchTermLower),
+              where('nom', '<=', searchTermUpper)
+            );
 
-            // Client-side filtering if a name search term is provided
-            if (searchTerm) {
-                const lowercasedSearch = searchTerm.toLowerCase();
-                fetchedEmployees = fetchedEmployees.filter(emp =>
-                    emp.nom.toLowerCase().includes(lowercasedSearch) ||
-                    emp.cognom.toLowerCase().includes(lowercasedSearch)
+            const lastNameQuery = query(
+              collection(firestore, 'directori'),
+              where('cognom', '>=', searchTermLower),
+              where('cognom', '<=', searchTermUpper)
+            );
+            
+            const departmentQuery = departmentFilter ? query(
+                collection(firestore, 'directori'),
+                where('departament', '==', departmentFilter)
+            ) : null;
+
+            const queries = [];
+            if(searchTerm) {
+                queries.push(getDocs(nameQuery));
+                queries.push(getDocs(lastNameQuery));
+            }
+            if(departmentQuery) {
+                queries.push(getDocs(departmentQuery));
+            }
+
+            const snapshots = await Promise.all(queries);
+
+            const employeesMap = new Map<string, Directori>();
+
+            snapshots.forEach(snapshot => {
+                snapshot.forEach(doc => {
+                    employeesMap.set(doc.id, { ...doc.data(), id: doc.id } as Directori);
+                });
+            });
+            
+            let fetchedEmployees = Array.from(employeesMap.values());
+            
+            // If both filters are active, we need to do a client-side intersection
+            if(searchTerm && departmentFilter) {
+                fetchedEmployees = fetchedEmployees.filter(emp => 
+                    (emp.nom.toLowerCase().includes(searchTermLower) || emp.cognom.toLowerCase().includes(searchTermLower))
+                    && emp.departament === departmentFilter
                 );
             }
-            
+
             const sorted = fetchedEmployees.sort((a,b) => {
                 const aVal = a[sortConfig.key] || '';
                 const bVal = b[sortConfig.key] || '';

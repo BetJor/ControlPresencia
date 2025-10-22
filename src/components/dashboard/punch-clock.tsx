@@ -12,17 +12,18 @@ import {
     AccordionTrigger,
   } from "@/components/ui/accordion"
 import { useToast } from '@/hooks/use-toast';
-import { Contact, Edit, Fingerprint, UserPlus, Check, ChevronsUpDown, Star } from 'lucide-react';
+import { Contact, Edit, Fingerprint, UserPlus, Check, ChevronsUpDown, Star, Search } from 'lucide-react';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { Card, CardTitle } from "@/components/ui/card";
-import { useFirestore, useUser, addDocumentNonBlocking, useCollection, useMemoFirebase, setDocumentNonBlocking } from "@/firebase";
-import { collection, serverTimestamp, doc, query, where, orderBy } from "firebase/firestore";
+import { useFirestore, useUser, addDocumentNonBlocking, setDocumentNonBlocking, useCollection, useMemoFirebase } from "@/firebase";
+import { collection, serverTimestamp, doc, query, where, getDocs, orderBy, limit } from "firebase/firestore";
 import { Loader2 } from "lucide-react";
 import type { Directori } from "@/lib/types";
+import { useDebounce } from "@/hooks/use-debounce";
 
 type FavoriteVisitor = {
     id: string;
@@ -34,6 +35,7 @@ export default function PunchClock() {
   const { toast } = useToast();
   const [employeeOpen, setEmployeeOpen] = React.useState(false);
   const [employeeValue, setEmployeeValue] = React.useState("");
+  const [employeeSearch, setEmployeeSearch] = React.useState('');
   
   const [favoritesOpen, setFavoritesOpen] = React.useState(false);
   const [visitorName, setVisitorName] = React.useState("");
@@ -42,21 +44,16 @@ export default function PunchClock() {
 
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
+
+  const [searchedEmployees, setSearchedEmployees] = React.useState<Directori[]>([]);
+  const [isSearching, setIsSearching] = React.useState(false);
+
+  const debouncedSearchTerm = useDebounce(employeeSearch, 300);
   
   const favoriteVisitorsCollection = useMemoFirebase(() => {
     if (!firestore) return null;
     return collection(firestore, 'favorite_visitors');
   }, [firestore]);
-
-  const directoryCollection = useMemoFirebase(() => {
-    if (!firestore) return null;
-    // IMPORTANT: Add a where clause to satisfy security rules that prevent full collection scans.
-    // We query for users that are not suspended, which covers all active employees.
-    return query(collection(firestore, 'directori'), where('suspès', '==', false), orderBy('cognom'), orderBy('nom'));
-  }, [firestore]);
-
-
-  const { data: employees, isLoading: employeesLoading } = useCollection<Directori>(directoryCollection);
 
   const { data: favoriteVisitors, isLoading: favoritesLoading } = useCollection<FavoriteVisitor>(favoriteVisitorsCollection);
 
@@ -71,6 +68,55 @@ export default function PunchClock() {
     }
   }, [visitorName, visitorCompany, favoriteVisitors]);
 
+  React.useEffect(() => {
+    const searchEmployees = async () => {
+        if (debouncedSearchTerm.length < 3 || !firestore) {
+            setSearchedEmployees([]);
+            return;
+        }
+
+        setIsSearching(true);
+        try {
+            const searchTermLower = debouncedSearchTerm.toLowerCase();
+            const nomQuery = query(
+              collection(firestore, 'directori'),
+              where('nom', '>=', searchTermLower),
+              where('nom', '<=', searchTermLower + '\uf8ff'),
+              limit(10)
+            );
+            const cognomQuery = query(
+              collection(firestore, 'directori'),
+              where('cognom', '>=', searchTermLower),
+              where('cognom', '<=', searchTermLower + '\uf8ff'),
+              limit(10)
+            );
+
+            const [nomSnapshot, cognomSnapshot] = await Promise.all([
+                getDocs(nomQuery),
+                getDocs(cognomQuery)
+            ]);
+
+            const employeesMap = new Map<string, Directori>();
+            nomSnapshot.docs.forEach(doc => employeesMap.set(doc.id, { ...doc.data(), id: doc.id } as Directori));
+            cognomSnapshot.docs.forEach(doc => employeesMap.set(doc.id, { ...doc.data(), id: doc.id } as Directori));
+            
+            setSearchedEmployees(Array.from(employeesMap.values()));
+
+        } catch (error) {
+            console.error("Error searching employees:", error);
+            toast({
+                variant: "destructive",
+                title: "Error de búsqueda",
+                description: "No se pudieron buscar empleados.",
+            });
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    searchEmployees();
+  }, [debouncedSearchTerm, firestore, toast]);
+
 
   const handleManualPunch = () => {
     if (!employeeValue || !firestore) {
@@ -82,7 +128,7 @@ export default function PunchClock() {
         return;
     }
 
-    const selectedEmployee = employees?.find((employee) => employee.centreCost === employeeValue);
+    const selectedEmployee = searchedEmployees.find((employee) => employee.centreCost === employeeValue);
 
     if (selectedEmployee) {
         const employeeDocRef = doc(firestore, 'usuaris_dins', selectedEmployee.centreCost);
@@ -102,6 +148,8 @@ export default function PunchClock() {
             description: `S'ha registrat l'entrada per a ${selectedEmployee.nom} ${selectedEmployee.cognom}.`,
         });
         setEmployeeValue(""); // Reset dropdown
+        setEmployeeSearch(""); // Reset search
+        setSearchedEmployees([]); // Clear results
     } else {
          toast({
             variant: "destructive",
@@ -162,7 +210,9 @@ export default function PunchClock() {
     }
   }
 
-  const isLoading = isUserLoading || favoritesLoading || employeesLoading;
+  const isLoading = isUserLoading || favoritesLoading;
+  const selectedEmployeeDisplay = searchedEmployees.find(emp => emp.centreCost === employeeValue);
+
 
   return (
     <Card>
@@ -197,26 +247,38 @@ export default function PunchClock() {
                                             className="w-full justify-between"
                                             disabled={isLoading}
                                         >
-                                            {employeeValue && employees
-                                            ? employees?.find((employee) => employee.centreCost === employeeValue)?.nom + ' ' + employees?.find((employee) => employee.centreCost === employeeValue)?.cognom
-                                            : "Seleccionar empleado..."}
+                                            {selectedEmployeeDisplay 
+                                                ? `${selectedEmployeeDisplay.cognom}, ${selectedEmployeeDisplay.nom}`
+                                                : "Buscar y seleccionar empleado..."
+                                            }
                                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                         </Button>
                                         </PopoverTrigger>
-                                        <PopoverContent className="w-[300px] p-0">
+                                        <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
                                         <Command>
-                                            <CommandInput placeholder="Buscar empleado..." />
+                                            <div className="flex items-center border-b px-3">
+                                                <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                                                <input
+                                                    placeholder="Buscar por nombre o apellido..."
+                                                    value={employeeSearch}
+                                                    onChange={(e) => setEmployeeSearch(e.target.value)}
+                                                    className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                                                />
+                                            </div>
                                             <CommandList>
-                                                <CommandEmpty>No se encontró el empleado.</CommandEmpty>
+                                                {isSearching && <CommandEmpty>Buscando...</CommandEmpty>}
+                                                {!isSearching && debouncedSearchTerm.length < 3 && <CommandEmpty>Escribe 3 o más letras para buscar.</CommandEmpty>}
+                                                {!isSearching && searchedEmployees.length === 0 && debouncedSearchTerm.length >= 3 && <CommandEmpty>No se encontraron empleados.</CommandEmpty>}
+                                                
                                                 <CommandGroup>
-                                                {employees?.map((employee: Directori) => (
+                                                {searchedEmployees.map((employee: Directori) => (
                                                     <CommandItem
-                                                    key={employee.id}
-                                                    value={employee.centreCost}
-                                                    onSelect={(currentValue) => {
-                                                        setEmployeeValue(currentValue === employeeValue ? "" : currentValue)
-                                                        setEmployeeOpen(false)
-                                                    }}
+                                                        key={employee.id}
+                                                        value={employee.centreCost}
+                                                        onSelect={(currentValue) => {
+                                                            setEmployeeValue(currentValue === employeeValue ? "" : currentValue)
+                                                            setEmployeeOpen(false)
+                                                        }}
                                                     >
                                                     <Check
                                                         className={cn(
@@ -336,3 +398,4 @@ export default function PunchClock() {
     </Card>
   );
 }
+
