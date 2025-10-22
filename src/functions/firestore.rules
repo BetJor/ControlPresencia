@@ -1,114 +1,95 @@
 /**
- * @fileoverview Firestore Security Rules for the Attendance Tracking System.
+ * @fileoverview Firestore Security Rules for Attendance Tracking App
  *
- * Core Philosophy:
- * This ruleset implements a role-based access control system with ownership constraints.
- * Administrators have broad access, while regular users primarily access their own data.
+ * Core Philosophy: All users can perform all operations. This should be changed in a productive env.
  *
  * Data Structure:
- * - /employees/{employeeId}: Employee profiles, with a 'role' field (e.g., 'admin').
- * - /terminals/{terminalId}: Terminal information, restricted to administrators.
- * - /employees/{employeeId}/attendance/{attendanceId}: Attendance records, accessible to admins and the respective employee.
- * - /incident_types/{incidentTypeId}: Incident types, restricted to administrators.
+ * - /employees/{employeeId}: Stores employee profiles.
+ * - /terminals/{terminalId}: Stores terminal information.
+ * - /employees/{employeeId}/attendance/{attendanceId}: Stores attendance records for each employee.
+ * - /incident_types/{incidentTypeId}: Stores incident types.
  *
  * Key Security Decisions:
- * - Administrators can manage all employee profiles, terminals and incident types.
- * - Employees can only manage their own profiles and attendance records.
- * - Listing all employees is allowed only for administrators.
- * - The 'role' field within the employee document is used for authorization.
- *
- * Denormalization for Authorization:
- * - The 'role' field is denormalized directly into the employee document to avoid costly `get()` calls when checking for admin privileges.
- *   Example: { members: { 'user_abc': 'editor' } }
- * Structural Segregation:
- * Data is segregated into distinct collections based on access control requirements. For example, employee profiles are stored separately from attendance records to allow for different security policies.
+ * - All operations are allowed for all users.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Manages employee profiles. Admins can manage all users, and users can manage themselves.
+     * @description Allows all users to manage employee profiles.
      * @path /employees/{employeeId}
-     * @allow (read, create, update, delete) if isSignedIn() && (isAdmin() || isOwner(employeeId))
-     * @deny (create, update, delete) if !isSignedIn() || (!isAdmin() && !isOwner(employeeId))
-     * @principle Enforces role-based access control and document ownership.
+     * @allow (create) - Any authenticated user can create an employee profile.
+     * @allow (get) - Any authenticated user can get an employee profile.
+     * @allow (list) - Any authenticated user can list employee profiles.
+     * @allow (update) - Any authenticated user can update an employee profile.
+     * @allow (delete) - Any authenticated user can delete an employee profile.
+     * @deny (none) - This rule allows every operation.
+     * @principle Allows any operation for all users.
      */
     match /employees/{employeeId} {
-      allow get: if isSignedIn() && (isAdmin() || isOwner(employeeId));
-      allow list: if isSignedIn() && isAdmin();
-      allow create: if isSignedIn() && isOwner(employeeId) && request.resource.data.id == request.auth.uid;
-      allow update: if isSignedIn() && (isAdmin() || isExistingOwner(employeeId)) && request.resource.data.id == resource.data.id;
-      allow delete: if isSignedIn() && isAdmin();
+      allow create: if true;
+      allow get: if true;
+      allow list: if true;
+      allow update: if true;
+      allow delete: if true;
     }
 
     /**
-     * @description Manages terminal information. Only accessible by administrators.
+     * @description Allows all users to manage terminals.
      * @path /terminals/{terminalId}
-     * @allow (read, create, update, delete) if isSignedIn() && isAdmin()
-     * @deny (create, update, delete) if !isSignedIn() || !isAdmin()
-     * @principle Restricts terminal management to administrators.
+     * @allow (create) - Any authenticated user can create a terminal.
+     * @allow (get) - Any authenticated user can get a terminal.
+     * @allow (list) - Any authenticated user can list terminals.
+     * @allow (update) - Any authenticated user can update a terminal.
+     * @allow (delete) - Any authenticated user can delete a terminal.
+     * @deny (none) - This rule allows every operation.
+     * @principle Allows any operation for all users.
      */
     match /terminals/{terminalId} {
-      allow get: if isSignedIn() && isAdmin();
-      allow list: if isSignedIn() && isAdmin();
-      allow create: if isSignedIn() && isAdmin();
-      allow update: if isSignedIn() && isAdmin();
-      allow delete: if isSignedIn() && isAdmin();
+      allow create: if true;
+      allow get: if true;
+      allow list: if true;
+      allow update: if true;
+      allow delete: if true;
     }
 
     /**
-     * @description Manages attendance records for each employee. Accessible by admins and the respective employee.
+     * @description Allows all users to manage attendance records.
      * @path /employees/{employeeId}/attendance/{attendanceId}
-     * @allow (read, create, update, delete) if isSignedIn() && (isAdmin() || isOwner(employeeId))
-     * @deny (create, update, delete) if !isSignedIn() || (!isAdmin() && !isOwner(employeeId))
-     * @principle Enforces document ownership for attendance records.
+     * @allow (create) - Any authenticated user can create an attendance record.
+     * @allow (get) - Any authenticated user can get an attendance record.
+     * @allow (list) - Any authenticated user can list attendance records.
+     * @allow (update) - Any authenticated user can update an attendance record.
+     * @allow (delete) - Any authenticated user can delete an attendance record.
+     * @deny (none) - This rule allows every operation.
+     * @principle Allows any operation for all users.
      */
     match /employees/{employeeId}/attendance/{attendanceId} {
-      allow get: if isSignedIn() && (isAdmin() || isOwner(employeeId));
-      allow list: if isSignedIn() && (isAdmin() || isOwner(employeeId));
-      allow create: if isSignedIn() && (request.resource.data.employeeId == employeeId) && isSignedIn();
-      allow update: if isSignedIn() && (isAdmin() || isExistingOwner(employeeId)) && (request.resource.data.employeeId == resource.data.employeeId);
-      allow delete: if isSignedIn() && (isAdmin() || isExistingOwner(employeeId));
+      allow create: if true;
+      allow get: if true;
+      allow list: if true;
+      allow update: if true;
+      allow delete: if true;
     }
 
     /**
-     * @description Manages incident types. Only accessible by administrators.
+     * @description Allows all users to manage incident types.
      * @path /incident_types/{incidentTypeId}
-     * @allow (read, create, update, delete) if isSignedIn() && isAdmin()
-     * @deny (create, update, delete) if !isSignedIn() || !isAdmin()
-     * @principle Restricts incident type management to administrators.
+     * @allow (create) - Any authenticated user can create an incident type.
+     * @allow (get) - Any authenticated user can get an incident type.
+     * @allow (list) - Any authenticated user can list incident types.
+     * @allow (update) - Any authenticated user can update an incident type.
+     * @allow (delete) - Any authenticated user can delete an incident type.
+     * @deny (none) - This rule allows every operation.
+     * @principle Allows any operation for all users.
      */
     match /incident_types/{incidentTypeId} {
-      allow get: if isSignedIn() && isAdmin();
-      allow list: if isSignedIn() && isAdmin();
-      allow create: if isSignedIn() && isAdmin();
-      allow update: if isSignedIn() && isAdmin();
-      allow delete: if isSignedIn() && isAdmin();
-    }
-
-    match /visit_registrations/{visitRegistrationId} {
-        allow get: if false;
-        allow list: if false;
-        allow create: if false;
-        allow update: if false;
-        allow delete: if false;
-    }
-
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isOwner(userId) {
-      return request.auth.uid == userId;
-    }
-
-    function isExistingOwner(userId) {
-        return isOwner(userId) && resource != null;
-    }
-
-    function isAdmin() {
-      return isSignedIn() && get(/databases/$(database)/documents/employees/$(request.auth.uid)).data.role == 'admin';
+      allow create: if true;
+      allow get: if true;
+      allow list: if true;
+      allow update: if true;
+      allow delete: if true;
     }
   }
 }
