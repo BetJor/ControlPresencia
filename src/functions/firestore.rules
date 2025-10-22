@@ -1,95 +1,19 @@
-/**
- * @fileoverview Firestore Security Rules for Attendance Tracking App
- *
- * Core Philosophy: All users can perform all operations. This should be changed in a productive env.
- *
- * Data Structure:
- * - /employees/{employeeId}: Stores employee profiles.
- * - /terminals/{terminalId}: Stores terminal information.
- * - /employees/{employeeId}/attendance/{attendanceId}: Stores attendance records for each employee.
- * - /incident_types/{incidentTypeId}: Stores incident types.
- *
- * Key Security Decisions:
- * - All operations are allowed for all users.
- */
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    /**
-     * @description Allows all users to manage employee profiles.
-     * @path /employees/{employeeId}
-     * @allow (create) - Any authenticated user can create an employee profile.
-     * @allow (get) - Any authenticated user can get an employee profile.
-     * @allow (list) - Any authenticated user can list employee profiles.
-     * @allow (update) - Any authenticated user can update an employee profile.
-     * @allow (delete) - Any authenticated user can delete an employee profile.
-     * @deny (none) - This rule allows every operation.
-     * @principle Allows any operation for all users.
-     */
-    match /employees/{employeeId} {
-      allow create: if true;
-      allow get: if true;
-      allow list: if true;
-      allow update: if true;
-      allow delete: if true;
+    
+    match /_placeholder_/{document=**} {
+      allow read, write: if false;
     }
 
-    /**
-     * @description Allows all users to manage terminals.
-     * @path /terminals/{terminalId}
-     * @allow (create) - Any authenticated user can create a terminal.
-     * @allow (get) - Any authenticated user can get a terminal.
-     * @allow (list) - Any authenticated user can list terminals.
-     * @allow (update) - Any authenticated user can update a terminal.
-     * @allow (delete) - Any authenticated user can delete a terminal.
-     * @deny (none) - This rule allows every operation.
-     * @principle Allows any operation for all users.
-     */
-    match /terminals/{terminalId} {
-      allow create: if true;
-      allow get: if true;
-      allow list: if true;
-      allow update: if true;
-      allow delete: if true;
+    function isSignedIn() {
+      return request.auth != null;
     }
 
-    /**
-     * @description Allows all users to manage attendance records.
-     * @path /employees/{employeeId}/attendance/{attendanceId}
-     * @allow (create) - Any authenticated user can create an attendance record.
-     * @allow (get) - Any authenticated user can get an attendance record.
-     * @allow (list) - Any authenticated user can list attendance records.
-     * @allow (update) - Any authenticated user can update an attendance record.
-     * @allow (delete) - Any authenticated user can delete an attendance record.
-     * @deny (none) - This rule allows every operation.
-     * @principle Allows any operation for all users.
-     */
-    match /employees/{employeeId}/attendance/{attendanceId} {
-      allow create: if true;
-      allow get: if true;
-      allow list: if true;
-      allow update: if true;
-      allow delete: if true;
-    }
-
-    /**
-     * @description Allows all users to manage incident types.
-     * @path /incident_types/{incidentTypeId}
-     * @allow (create) - Any authenticated user can create an incident type.
-     * @allow (get) - Any authenticated user can get an incident type.
-     * @allow (list) - Any authenticated user can list incident types.
-     * @allow (update) - Any authenticated user can update an incident type.
-     * @allow (delete) - Any authenticated user can delete an incident type.
-     * @deny (none) - This rule allows every operation.
-     * @principle Allows any operation for all users.
-     */
-    match /incident_types/{incidentTypeId} {
-      allow create: if true;
-      allow get: if true;
-      allow list: if true;
-      allow update: if true;
-      allow delete: if true;
+    // Allow all authenticated users to read and write to all collections
+    match /{document=**} {
+      allow read, write: if isSignedIn();
     }
   }
 }

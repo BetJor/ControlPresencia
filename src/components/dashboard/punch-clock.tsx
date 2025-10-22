@@ -268,7 +268,7 @@ export default function PunchClock() {
                                             <CommandList>
                                                 {isSearching && <CommandEmpty>Buscando...</CommandEmpty>}
                                                 {!isSearching && debouncedSearchTerm.length < 3 && <CommandEmpty>Escribe 3 o más letras para buscar.</CommandEmpty>}
-                                                {!isSearching && searchedEmployees.length === 0 && debouncedSearchTerm.length >= 3 && <CommandEmpty>No se encontraron empleados.</CommandEmpty>}
+                                                {!isSearching && searchedEmployees.length === 0 && debouncedSearchTerm.length >= 3 && <CommandEmpty>No em retorna res</CommandEmpty>}
                                                 
                                                 <CommandGroup>
                                                 {searchedEmployees.map((employee: Directori) => (
@@ -398,4 +398,3 @@ export default function PunchClock() {
     </Card>
   );
 }
-
