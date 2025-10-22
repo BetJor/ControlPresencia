@@ -68,6 +68,8 @@ export default function PresentPeopleList() {
   // 3. Create a memoized query to get details for ONLY the present staff
   const staffDetailsQuery = useMemoFirebase(() => {
     if (!firestore || presentStaffIds.length === 0) return null;
+    // Firestore 'in' queries are limited to 30 values. We need to chunk the array.
+    // This is a simplified example; for more than 30 present people, you'd need multiple queries.
     return query(collection(firestore, 'directori'), where('centreCost', 'in', presentStaffIds.slice(0, 30)));
   }, [firestore, presentStaffIds]);
 
@@ -134,11 +136,11 @@ export default function PresentPeopleList() {
       <CardHeader>
         <CardTitle className="font-headline flex items-center gap-2">
           <Users className="h-6 w-6" />
-          Persones a l'Oficina ({isLoading ? '...' : totalPresent})
+          Presentes en la oficina ({isLoading ? '...' : totalPresent})
         </CardTitle>
         <CardDescription>
-          Una llista de les persones que són actualment a les instal·lacions.
-          Actualitzat en temps real.
+          Una lista de las personas que se encuentran actualmente en las instalaciones.
+          Actualizado en tiempo real.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -154,7 +156,7 @@ export default function PresentPeopleList() {
                 <AccordionTrigger className="text-base font-medium">
                   <div className="flex items-center gap-2">
                     <Contact className="h-5 w-5" />
-                    <span>Visites ({(visitors?.length || 0)})</span>
+                    <span>Visitantes ({(visitors?.length || 0)})</span>
                   </div>
                 </AccordionTrigger>
                 <AccordionContent>
@@ -162,14 +164,14 @@ export default function PresentPeopleList() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="py-2 px-3">Nom</TableHead>
+                          <TableHead className="py-2 px-3">Nombre</TableHead>
                           <TableHead className="hidden sm:table-cell py-2 px-3">
                             Empresa
                           </TableHead>
                           <TableHead className="hidden sm:table-cell py-2 px-3">
                             Hora Entrada
                           </TableHead>
-                          <TableHead className="text-right py-2 px-3">Accions</TableHead>
+                          <TableHead className="text-right py-2 px-3">Acciones</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -199,7 +201,7 @@ export default function PresentPeopleList() {
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>
-                                  <p>Marcar Sortida</p>
+                                  <p>Marcar Salida</p>
                                 </TooltipContent>
                               </Tooltip>
                             </TableCell>
@@ -209,7 +211,7 @@ export default function PresentPeopleList() {
                     </Table>
                   ) : (
                     <div className="p-4 text-center text-muted-foreground text-sm">
-                      No hi ha visites a l'oficina.
+                      No hay visitantes en la oficina.
                     </div>
                   )}
                 </AccordionContent>
@@ -218,7 +220,7 @@ export default function PresentPeopleList() {
                 <AccordionTrigger className="text-base font-medium">
                   <div className="flex items-center gap-2">
                     <User className="h-5 w-5" />
-                    <span>Empleats ({enrichedStaff?.length || 0})</span>
+                    <span>Empleados ({enrichedStaff?.length || 0})</span>
                   </div>
                 </AccordionTrigger>
                 <AccordionContent>
@@ -226,8 +228,8 @@ export default function PresentPeopleList() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="py-2 px-3">Cognoms</TableHead>
-                          <TableHead className="py-2 px-3">Nom</TableHead>
+                          <TableHead className="py-2 px-3">Apellidos</TableHead>
+                          <TableHead className="py-2 px-3">Nombre</TableHead>
                           <TableHead className="py-2 px-3">ID</TableHead>
                           <TableHead className="py-2 px-3 text-center">
                             <Tooltip>
@@ -236,7 +238,7 @@ export default function PresentPeopleList() {
                                 <span>#</span>
                               </TooltipTrigger>
                               <TooltipContent>
-                                <p>Nombre de moviments</p>
+                                <p>Número de movimientos</p>
                               </TooltipContent>
                             </Tooltip>
                           </TableHead>
@@ -247,12 +249,12 @@ export default function PresentPeopleList() {
                                 <span>T.</span>
                               </TooltipTrigger>
                               <TooltipContent>
-                                <p>Terminal darrer moviment</p>
+                                <p>Terminal último movimiento</p>
                               </TooltipContent>
                             </Tooltip>
                           </TableHead>
-                          <TableHead className="py-2 px-3">Darrera Entrada</TableHead>
-                          <TableHead className="text-right py-2 px-3">Accions</TableHead>
+                          <TableHead className="py-2 px-3">Última Entrada</TableHead>
+                          <TableHead className="text-right py-2 px-3">Acciones</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -281,7 +283,7 @@ export default function PresentPeopleList() {
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>
-                                  <p>Marcar Sortida</p>
+                                  <p>Marcar Salida</p>
                                 </TooltipContent>
                               </Tooltip>
                             </TableCell>
@@ -291,7 +293,7 @@ export default function PresentPeopleList() {
                     </Table>
                   ) : (
                     <div className="p-4 text-center text-muted-foreground text-sm">
-                      No hi ha empleats a l'oficina.
+                      No hay empleados en la oficina.
                     </div>
                   )}
                 </AccordionContent>
@@ -301,7 +303,7 @@ export default function PresentPeopleList() {
         )}
         {totalPresent === 0 && !isLoading && (
           <div className="pt-4 text-center text-muted-foreground text-sm">
-            No hi ha ningú a l'oficina en aquest moment.
+            No hay nadie en la oficina en este momento.
           </div>
         )}
       </CardContent>
