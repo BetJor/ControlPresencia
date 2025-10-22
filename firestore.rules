@@ -1,225 +1,196 @@
 /**
- * @fileOverview Firestore Security Rules for the Clockwork application.
- *
- * Core Philosophy:
- * This ruleset prioritizes a secure-by-default posture. It enforces strict
- * ownership for user-specific data and carefully controls access to other
- * collections based on the defined data model. Public read access is only
- * granted to collections that are explicitly intended to be public.
+ * @file Firestore Security Rules
+ * @description This ruleset enforces a security model based on user authentication and role-based access control.
  *
  * Data Structure:
- * - `/users/{userId}`: Stores user profile data, with 'role' denormalized for
- *   authorization.
- * - `/attendance_records/{attendanceRecordId}`: Stores attendance records,
- *   including `employeeId` for filtering.
- * - `/terminals/{terminalId}`: Stores terminal information.
- * - `/incident_types/{incidentTypeId}`: Stores incident types.
- * - `/employees/{employeeId}`: Stores employee information.
- * - `/visit_registrations/{visitRegistrationId}`: Stores visit registration data.
- * - `/favorite_visitors/{favoriteVisitorId}`: Stores favorite visitor information.
- * - `/usuaris_dins/{usuariId}`: Stores a list of present users (a "whiteboard"),
- *   populated by a trusted backend.
- * - `/directori/{directoriId}`: Stores employee directory information.
- * - `/departaments/{departamentId}`: Stores unique department names for filtering.
+ * - /users/{userId}: Stores user profiles with denormalized roles for authorization.
+ * - /attendance_records/{attendanceRecordId}: Stores attendance records for employees.
+ * - /terminals/{terminalId}: Stores terminal information.
+ * - /incident_types/{incidentTypeId}: Stores incident types.
+ * - /employees/{employeeId}: Stores employee information.
+ * - /visit_registrations/{visitRegistrationId}: Stores visit registration information.
+ * - /favorite_visitors/{favoriteVisitorId}: Stores favorite visitor information.
+ * - /usuaris_dins/{usuariId}: Stores real-time presence data, acting as a 'whiteboard'.
+ * - /directori/{directoriId}: Stores employee directory information.
+ * - /departaments/{departamentId}: Stores a list of departments.
  *
  * Key Security Decisions:
- * - User listing is generally disallowed.
- * - The `/usuaris_dins` collection is publicly readable by authenticated users.
- * - The `/departaments` collection is publicly readable.
- * - All write operations are carefully validated against the appropriate
- *   authorization checks.
- * - Relational integrity is enforced on `create` and `update` operations for
- *   user-scoped subcollections.
- *
- * Denormalization for Authorization:
- *  - User roles are denormalized into the `/users/{userId}` document itself.
- *  - `employeeId` is denormalized into the `attendance_records` document
- *
- * Structural Segregation:
- *   Data is stored in separate collections based on its function. Public-readable data, like the `usuaris_dins` whiteboard, has its own collection.
+ * - User data in `/users/{userId}` is protected by owner-only access.
+ * - The `usuaris_dins` collection (presence whiteboard) is publicly readable by authenticated users, but only writable by a trusted backend.
+ * - Listing is generally allowed only for user-owned subcollections or public collections.
+ * - The `directori` collection is publicly readable, but write access is only granted to a trusted backend process.
+ * - The `departaments` collection is publicly readable, but write access is only granted to a trusted backend process.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Checks if the request is made by a signed-in user.
-     * @returns {boolean} True if the user is signed in, false otherwise.
-     */
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    /**
-     * @description Checks if the authenticated user's UID matches the provided user ID.
-     * @param {string} userId - The user ID to compare against the authenticated user's UID.
-     * @returns {boolean} True if the UIDs match, false otherwise.
-     */
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
-    /**
-     * @description Checks if the authenticated user is the owner of the existing document.
-     *              Combines the ownership check with the existence check.
-     * @param {string} userId - The user ID to compare against the authenticated user's UID.
-     * @returns {boolean} True if the UIDs match and the document exists, false otherwise.
-     */
-    function isExistingOwner(userId) {
-      return isOwner(userId) && resource != null;
-    }
-
-    /**
-     * @description Rules for the /users/{userId} collection.
+     * @description Allows access only to authenticated users.
      * @path /users/{userId}
-     * @allow (create) User with UID 'user123' can create their own profile document.
-     *   request.auth.uid: 'user123'
-     *   request.resource.data.id: 'user123'
-     * @allow (get) User with UID 'user123' can read their own profile document.
-     *   request.auth.uid: 'user123'
-     * @deny (update) User with UID 'user456' cannot update the 'id' field of user 'user123's profile.
-     *   request.auth.uid: 'user456'
-     *   resource.data.id: 'user123'
-     *   request.resource.data.id: 'user456'
-     * @principle Enforces document ownership for writes and restricts read access to the owner.
-     *            Validates relational integrity between the path and document data.
+     * @allow (create) User with matching auth UID can create their own profile.
+     * @allow (get, list, update, delete) Only the user with matching auth UID can access their own profile.
+     * @deny (create) User tries to create a profile with a different user ID.
+     * @principle Enforces user-ownership.
      */
     match /users/{userId} {
+      function isSignedIn() {
+        return request.auth != null;
+      }
+
+      function isOwner(userId) {
+        return request.auth.uid == userId;
+      }
+
+      function isExistingOwner(userId) {
+        return isOwner(userId) && resource != null;
+      }
+
       allow get: if isOwner(userId);
       allow list: if false;
-      allow create: if isOwner(userId) && request.resource.data.id == userId;
-      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Rules for the /attendance_records/{attendanceRecordId} collection.
+     * @description Allows read and write access to attendance records.  No ownership checks implemented.
      * @path /attendance_records/{attendanceRecordId}
-     * @allow (create) Authenticated user can create a new attendance record.
-     *   request.auth.uid: 'user123'
-     * @allow (get) Authenticated user can read an attendance record.
-     *   request.auth.uid: 'user123'
-     * @deny (update) Non-existent attendance record cannot be updated.
-     *   request.auth.uid: 'user123'
-     * @principle Authenticated users can manage attendance records.
+     * @allow (get, list) Any authenticated user can read attendance records.
+     * @allow (create) Any authenticated user can create attendance records.
+     * @allow (update) Any authenticated user can update attendance records.
+     * @allow (delete) Any authenticated user can delete attendance records.
+     * @principle No ownership enforced.
      */
     match /attendance_records/{attendanceRecordId} {
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if resource != null && isSignedIn();
-      allow delete: if resource != null && isSignedIn();
+        function isSignedIn() {
+          return request.auth != null;
+        }
+
+        allow get: if isSignedIn();
+        allow list: if isSignedIn();
+        allow create: if isSignedIn();
+        allow update: if isSignedIn();
+        allow delete: if isSignedIn();
     }
 
     /**
-     * @description Rules for the /terminals/{terminalId} collection.
+     * @description Allows read and write access to terminals. No ownership checks implemented.
      * @path /terminals/{terminalId}
-     * @allow (create) Authenticated user can create a new terminal.
-     *   request.auth.uid: 'user123'
-     * @allow (get) Authenticated user can read a terminal.
-     *   request.auth.uid: 'user123'
-     * @deny (update) Non-existent terminal cannot be updated.
-     *   request.auth.uid: 'user123'
-     * @principle Authenticated users can manage terminals.
+     * @allow (get, list) Any authenticated user can read terminal information.
+     * @allow (create) Any authenticated user can create terminal information.
+     * @allow (update) Any authenticated user can update terminal information.
+     * @allow (delete) Any authenticated user can delete terminal information.
+     * @principle No ownership enforced.
      */
     match /terminals/{terminalId} {
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if resource != null && isSignedIn();
-      allow delete: if resource != null && isSignedIn();
+        function isSignedIn() {
+          return request.auth != null;
+        }
+
+        allow get: if isSignedIn();
+        allow list: if isSignedIn();
+        allow create: if isSignedIn();
+        allow update: if isSignedIn();
+        allow delete: if isSignedIn();
     }
 
     /**
-     * @description Rules for the /incident_types/{incidentTypeId} collection.
+     * @description Allows read and write access to incident types.  No ownership checks implemented.
      * @path /incident_types/{incidentTypeId}
-     * @allow (create) Authenticated user can create a new incident type.
-     *   request.auth.uid: 'user123'
-     * @allow (get) Authenticated user can read an incident type.
-     *   request.auth.uid: 'user123'
-     * @deny (update) Non-existent incident type cannot be updated.
-     *   request.auth.uid: 'user123'
-     * @principle Authenticated users can manage incident types.
+     * @allow (get, list) Any authenticated user can read incident types.
+     * @allow (create) Any authenticated user can create incident types.
+     * @allow (update) Any authenticated user can update incident types.
+     * @allow (delete) Any authenticated user can delete incident types.
+     * @principle No ownership enforced.
      */
     match /incident_types/{incidentTypeId} {
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if resource != null && isSignedIn();
-      allow delete: if resource != null && isSignedIn();
+        function isSignedIn() {
+          return request.auth != null;
+        }
+
+        allow get: if isSignedIn();
+        allow list: if isSignedIn();
+        allow create: if isSignedIn();
+        allow update: if isSignedIn();
+        allow delete: if isSignedIn();
     }
 
     /**
-     * @description Rules for the /employees/{employeeId} collection.
+     * @description Allows read and write access to employees. No ownership checks implemented.
      * @path /employees/{employeeId}
-     * @allow (create) Authenticated user can create a new employee.
-     *   request.auth.uid: 'user123'
-     * @allow (get) Authenticated user can read an employee.
-     *   request.auth.uid: 'user123'
-     * @deny (update) Non-existent employee cannot be updated.
-     *   request.auth.uid: 'user123'
-     * @principle Authenticated users can manage employees.
+     * @allow (get, list) Any authenticated user can read employee information.
+     * @allow (create) Any authenticated user can create employee information.
+     * @allow (update) Any authenticated user can update employee information.
+     * @allow (delete) Any authenticated user can delete employee information.
+     * @principle No ownership enforced.
      */
     match /employees/{employeeId} {
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if resource != null && isSignedIn();
-      allow delete: if resource != null && isSignedIn();
+        function isSignedIn() {
+          return request.auth != null;
+        }
+
+        allow get: if isSignedIn();
+        allow list: if isSignedIn();
+        allow create: if isSignedIn();
+        allow update: if isSignedIn();
+        allow delete: if isSignedIn();
     }
 
     /**
-     * @description Rules for the /visit_registrations/{visitRegistrationId} collection.
+     * @description Allows read and write access to visit registrations. No ownership checks implemented.
      * @path /visit_registrations/{visitRegistrationId}
-     * @allow (create) Authenticated user can create a new visit registration.
-     *   request.auth.uid: 'user123'
-     * @allow (get) Authenticated user can read a visit registration.
-     *   request.auth.uid: 'user123'
-     * @deny (update) Non-existent visit registration cannot be updated.
-     *   request.auth.uid: 'user123'
-     * @principle Authenticated users can manage visit registrations.
+     * @allow (get, list) Any authenticated user can read visit registrations.
+     * @allow (create) Any authenticated user can create visit registrations.
+     * @allow (update) Any authenticated user can update visit registrations.
+     * @allow (delete) Any authenticated user can delete visit registrations.
+     * @principle No ownership enforced.
      */
     match /visit_registrations/{visitRegistrationId} {
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if resource != null && isSignedIn();
-      allow delete: if resource != null && isSignedIn();
+        function isSignedIn() {
+          return request.auth != null;
+        }
+
+        allow get: if isSignedIn();
+        allow list: if isSignedIn();
+        allow create: if isSignedIn();
+        allow update: if isSignedIn();
+        allow delete: if isSignedIn();
     }
 
     /**
-     * @description Rules for the /favorite_visitors/{favoriteVisitorId} collection.
+     * @description Allows read and write access to favorite visitors. No ownership checks implemented.
      * @path /favorite_visitors/{favoriteVisitorId}
-     * @allow (create) Authenticated user can create a new favorite visitor.
-     *   request.auth.uid: 'user123'
-     * @allow (get) Authenticated user can read a favorite visitor.
-     *   request.auth.uid: 'user123'
-     * @deny (update) Non-existent favorite visitor cannot be updated.
-     *   request.auth.uid: 'user123'
-     * @principle Authenticated users can manage favorite visitors.
+     * @allow (get, list) Any authenticated user can read favorite visitors.
+     * @allow (create) Any authenticated user can create favorite visitors.
+     * @allow (update) Any authenticated user can update favorite visitors.
+     * @allow (delete) Any authenticated user can delete favorite visitors.
+     * @principle No ownership enforced.
      */
     match /favorite_visitors/{favoriteVisitorId} {
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if resource != null && isSignedIn();
-      allow delete: if resource != null && isSignedIn();
+        function isSignedIn() {
+          return request.auth != null;
+        }
+
+        allow get: if isSignedIn();
+        allow list: if isSignedIn();
+        allow create: if isSignedIn();
+        allow update: if isSignedIn();
+        allow delete: if isSignedIn();
     }
 
     /**
-     * @description Rules for the /usuaris_dins/{usuariId} collection.
+     * @description Allows any authenticated user to read who's inside, but restricts writes.
      * @path /usuaris_dins/{usuariId}
-     * @allow (get) Any signed-in user can read the current list of users inside the office.
-     *   request.auth.uid: 'user123'
-     * @allow (list) Any signed-in user can list the current list of users inside the office.
-     *   request.auth.uid: 'user123'
-     * @deny (create) No one can create a new entry through the client.
-     *   request.auth.uid: 'user123'
-     * @deny (update) No one can update an entry through the client.
-     *   request.auth.uid: 'user123'
-     * @principle The collection is read-only for clients, intended to be updated by a trusted backend.
+     * @allow (get, list) Any authenticated user can read the list of users inside.
+     * @deny (create, update, delete) Only a trusted backend can modify this collection.
+     * @principle Public read, restricted write.
      */
     match /usuaris_dins/{usuariId} {
+      function isSignedIn() {
+        return request.auth != null;
+      }
+
       allow get: if isSignedIn();
       allow list: if isSignedIn();
       allow create: if false;
@@ -228,18 +199,17 @@ service cloud.firestore {
     }
 
     /**
-     * @description Rules for the /directori/{directoriId} collection.
+     * @description Allows any authenticated user to read the directory, but restricts writes.
      * @path /directori/{directoriId}
-     * @allow (get) Any authenticated user can read the directory information.
-     *   request.auth.uid: 'user123'
-     * @allow (list) Any authenticated user can list the directory information.
-     *   request.auth.uid: 'user123'
-     * @deny (create) No one can create a new entry through the client.
-     *   request.auth.uid: 'user123'
-     * @deny (update) No one can update an entry through the client.
-     * @principle The collection is read-only for clients, to be populated by a trusted backend.
+     * @allow (get, list) Any authenticated user can read the directory.
+     * @deny (create, update, delete) Only a trusted backend can modify this collection.
+     * @principle Public read, restricted write.
      */
     match /directori/{directoriId} {
+      function isSignedIn() {
+        return request.auth != null;
+      }
+
       allow get: if isSignedIn();
       allow list: if isSignedIn();
       allow create: if false;
@@ -248,17 +218,19 @@ service cloud.firestore {
     }
 
     /**
-     * @description Rules for the /departaments/{departamentId} collection.
+     * @description Allows any authenticated user to read the department list, but restricts writes.
      * @path /departaments/{departamentId}
-     * @allow (get) Any user can read the department information.
-     * @allow (list) Any user can list the department information.
-     * @deny (create) No one can create a new entry through the client.
-     * @deny (update) No one can update an entry through the client.
-     * @principle The collection is read-only for clients, to be populated by a trusted backend.
+     * @allow (get, list) Any authenticated user can read the department list.
+     * @deny (create, update, delete) Only a trusted backend can modify this collection.
+     * @principle Public read, restricted write.
      */
     match /departaments/{departamentId} {
-      allow get: if true;
-      allow list: if true;
+      function isSignedIn() {
+        return request.auth != null;
+      }
+
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
       allow create: if false;
       allow update: if false;
       allow delete: if false;
