@@ -249,7 +249,7 @@ export default function PunchClock() {
                                         >
                                             {selectedEmployeeDisplay 
                                                 ? `${selectedEmployeeDisplay.cognom}, ${selectedEmployeeDisplay.nom}`
-                                                : "Buscar y seleccionar empleado..."
+                                                : "El filtre que poso aqui no em retorna empleats"
                                             }
                                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                         </Button>
