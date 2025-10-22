@@ -221,7 +221,12 @@ exports.sincronitzarPersonalPresent = functions
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const userPunches = {};
+        const terminalsValids = ['10', '11', '12', '13'];
         for (const fitxatge of fitxatges) {
+            const terminalId = String(fitxatge['Id Terminal']);
+            if (!terminalsValids.includes(terminalId)) {
+                continue; // Ignora el fitxatge si no és d'una terminal vàlida
+            }
             const dateStr = fitxatge['Fecha y Hora'] || fitxatge['Data'];
             let employeeId = fitxatge.Identificador;
             if (!dateStr || typeof dateStr !== 'string' || employeeId === null || employeeId === undefined)
@@ -250,6 +255,7 @@ exports.sincronitzarPersonalPresent = functions
                     nomOriginal: lastPunch.Nombre || '',
                     cognomsOriginal: lastPunch.Apellidos || '',
                     nombreMoviments: punches.length,
+                    darrerTerminal: lastPunch['Id Terminal'] || '',
                 };
             }
         }
@@ -281,6 +287,7 @@ exports.sincronitzarPersonalPresent = functions
                     nom: (userInfo === null || userInfo === void 0 ? void 0 : userInfo.nom) || presentUsers[userId].nomOriginal,
                     cognoms: (userInfo === null || userInfo === void 0 ? void 0 : userInfo.cognom) || presentUsers[userId].cognomsOriginal,
                     nombreMoviments: presentUsers[userId].nombreMoviments,
+                    darrerTerminal: presentUsers[userId].darrerTerminal,
                 };
                 const docRef = usuarisDinsCollection.doc(userId);
                 batch.set(docRef, dataToSet, { merge: true });
