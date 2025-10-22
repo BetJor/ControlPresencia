@@ -11,7 +11,7 @@ import { Loader2 } from "lucide-react";
 
 // Google Icon SVG component
 const GoogleIcon = () => (
-  <svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+  <svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="h-5 w-5">
     <title>Google</title>
     <path
       d="M12.48 10.92v3.28h7.84c-.24 1.84-.85 3.18-1.73 4.1-1.05 1.05-2.58 2.6-5.82 2.6-4.96 0-9-3.96-9-9s4.04-9 9-9c2.86 0 4.64 1.25 5.74 2.25l2.43-2.33C18.4 2.02 15.65 1 12.48 1 5.8 1 1 5.8 1 12s4.8 11 11.48 11c3.54 0 6.3-1.2 8.35-3.35 2.1-2.1 2.8-5.05 2.8-7.95v-1.2H12.48z"
@@ -70,7 +70,7 @@ export default function LoginPage() {
           <div className="grid gap-4">
             <Button onClick={handleGoogleLogin} className="w-full" variant="outline" disabled={isLoggingIn}>
               <GoogleIcon />
-              Entra amb Google
+              <span>Entra amb Google</span>
             </Button>
           </div>
         </div>
