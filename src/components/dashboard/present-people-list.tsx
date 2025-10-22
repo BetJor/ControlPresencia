@@ -23,7 +23,7 @@ import {
 } from '@/firebase';
 import type { VisitRegistration, UsuariDins, Directori } from '@/lib/types';
 import { collection, query, where, doc } from 'firebase/firestore';
-import { Contact, Users, User, Loader2, LogOut, Repeat, Terminal } from 'lucide-react';
+import { Contact, Users, User, Loader2, LogOut, Repeat, Terminal, Edit2 } from 'lucide-react';
 import {
   Accordion,
   AccordionContent,
@@ -76,13 +76,13 @@ export default function PresentPeopleList() {
   // 4. Execute the query to get the detailed staff info
   const { data: detailedStaff, isLoading: staffDetailsLoading } = useCollection<Directori>(staffDetailsQuery);
 
-  // 5. Enrich the raw staff data with details once both are loaded
-  const enrichedStaff = useMemo(() => {
-    if (!presentStaffRaw || !detailedStaff) return [];
+  // 5. Enrich the raw staff data and split into manual and auto
+  const [manualStaff, autoStaff] = useMemo(() => {
+    if (!presentStaffRaw || !detailedStaff) return [[], []];
     
     const staffMap = new Map(detailedStaff.map(s => [String(s.centreCost).trim(), s]));
     
-    return presentStaffRaw.map(present => {
+    const enrichedStaff = presentStaffRaw.map(present => {
       const details = staffMap.get(String(present.id).trim());
       return {
         ...present,
@@ -96,6 +96,12 @@ export default function PresentPeopleList() {
         const timeB = b.horaDarreraEntrada?.toDate().getTime() || 0;
         return timeB - timeA; // Sort descending (most recent first)
     });
+
+    const manual = enrichedStaff.filter(e => e.darrerTerminal === 'MANUAL');
+    const auto = enrichedStaff.filter(e => e.darrerTerminal !== 'MANUAL');
+    
+    return [manual, auto];
+
   }, [presentStaffRaw, detailedStaff]);
 
 
@@ -114,7 +120,7 @@ export default function PresentPeopleList() {
   };
 
   const isLoading = staffLoading || visitorsLoading || staffDetailsLoading;
-  const totalPresent = (enrichedStaff?.length || 0) + (visitors?.length || 0);
+  const totalPresent = (autoStaff.length || 0) + (manualStaff.length || 0) + (visitors?.length || 0);
 
   const getFormattedTime = (timestamp: any) => {
     if (timestamp && typeof timestamp.toDate === 'function') {
@@ -130,6 +136,75 @@ export default function PresentPeopleList() {
     }
     return 'N/A';
   };
+
+  const renderStaffTable = (staffList: UsuariDins[]) => (
+     <Table>
+        <TableHeader>
+            <TableRow>
+                <TableHead className="py-2 px-3">Apellidos</TableHead>
+                <TableHead className="py-2 px-3">Nombre</TableHead>
+                <TableHead className="py-2 px-3">ID</TableHead>
+                <TableHead className="py-2 px-3 text-center">
+                <Tooltip>
+                    <TooltipTrigger className='flex items-center gap-1'>
+                    <Repeat className="h-4 w-4" />
+                    <span>#</span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                    <p>Número de movimientos</p>
+                    </TooltipContent>
+                </Tooltip>
+                </TableHead>
+                <TableHead className="py-2 px-3 text-center">
+                <Tooltip>
+                    <TooltipTrigger className='flex items-center gap-1'>
+                    <Terminal className="h-4 w-4" />
+                    <span>T.</span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                    <p>Terminal último movimiento</p>
+                    </TooltipContent>
+                </Tooltip>
+                </TableHead>
+                <TableHead className="py-2 px-3">Última Entrada</TableHead>
+                <TableHead className="text-right py-2 px-3">Acciones</TableHead>
+            </TableRow>
+        </TableHeader>
+        <TableBody>
+            {staffList.map((employee) => (
+            <TableRow key={`emp-${employee.id}`} className="text-sm">
+                <TableCell className="font-medium py-2 px-3">
+                {employee.cognom}
+                </TableCell>
+                <TableCell className="py-2 px-3">{employee.nom}</TableCell>
+                <TableCell className="py-2 px-3">{employee.id}</TableCell>
+                <TableCell className="py-2 px-3 text-center">{employee.nombreMoviments}</TableCell>
+                <TableCell className="py-2 px-3 text-center">{employee.darrerTerminal}</TableCell>
+                <TableCell className="py-2 px-3">{getFormattedDateTime(employee.horaDarreraEntrada)}</TableCell>
+                <TableCell className="text-right py-2 px-3">
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() =>
+                        handleEmployeeCheckout(employee.id)
+                        }
+                        className="h-8 w-8"
+                    >
+                        <LogOut className="h-4 w-4" />
+                    </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                    <p>Marcar Salida</p>
+                    </TooltipContent>
+                </Tooltip>
+                </TableCell>
+            </TableRow>
+            ))}
+        </TableBody>
+    </Table>
+  );
 
   return (
     <Card>
@@ -151,7 +226,7 @@ export default function PresentPeopleList() {
           </div>
         ) : (
           <TooltipProvider>
-            <Accordion type="multiple" defaultValue={['visitors', 'employees']}>
+            <Accordion type="multiple" defaultValue={['visitors', 'manual', 'employees']}>
               <AccordionItem value="visitors">
                 <AccordionTrigger className="text-base font-medium">
                   <div className="flex items-center gap-2">
@@ -216,81 +291,35 @@ export default function PresentPeopleList() {
                   )}
                 </AccordionContent>
               </AccordionItem>
+
+              <AccordionItem value="manual">
+                <AccordionTrigger className="text-base font-medium">
+                  <div className="flex items-center gap-2">
+                    <Edit2 className="h-5 w-5" />
+                    <span>Registro manual ({manualStaff.length})</span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent>
+                  {manualStaff.length > 0 ? (
+                    renderStaffTable(manualStaff)
+                  ) : (
+                    <div className="p-4 text-center text-muted-foreground text-sm">
+                      No hay registros manuales.
+                    </div>
+                  )}
+                </AccordionContent>
+              </AccordionItem>
+
               <AccordionItem value="employees">
                 <AccordionTrigger className="text-base font-medium">
                   <div className="flex items-center gap-2">
                     <User className="h-5 w-5" />
-                    <span>Empleados ({enrichedStaff?.length || 0})</span>
+                    <span>Empleados ({autoStaff.length})</span>
                   </div>
                 </AccordionTrigger>
                 <AccordionContent>
-                  {enrichedStaff && enrichedStaff.length > 0 ? (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="py-2 px-3">Apellidos</TableHead>
-                          <TableHead className="py-2 px-3">Nombre</TableHead>
-                          <TableHead className="py-2 px-3">ID</TableHead>
-                          <TableHead className="py-2 px-3 text-center">
-                            <Tooltip>
-                              <TooltipTrigger className='flex items-center gap-1'>
-                                <Repeat className="h-4 w-4" />
-                                <span>#</span>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Número de movimientos</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TableHead>
-                           <TableHead className="py-2 px-3 text-center">
-                            <Tooltip>
-                              <TooltipTrigger className='flex items-center gap-1'>
-                                <Terminal className="h-4 w-4" />
-                                <span>T.</span>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Terminal último movimiento</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TableHead>
-                          <TableHead className="py-2 px-3">Última Entrada</TableHead>
-                          <TableHead className="text-right py-2 px-3">Acciones</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {enrichedStaff.map((employee) => (
-                          <TableRow key={`emp-${employee.id}`} className="text-sm">
-                            <TableCell className="font-medium py-2 px-3">
-                              {employee.cognom}
-                            </TableCell>
-                            <TableCell className="py-2 px-3">{employee.nom}</TableCell>
-                            <TableCell className="py-2 px-3">{employee.id}</TableCell>
-                            <TableCell className="py-2 px-3 text-center">{employee.nombreMoviments}</TableCell>
-                            <TableCell className="py-2 px-3 text-center">{employee.darrerTerminal}</TableCell>
-                            <TableCell className="py-2 px-3">{getFormattedDateTime(employee.horaDarreraEntrada)}</TableCell>
-                             <TableCell className="text-right py-2 px-3">
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() =>
-                                      handleEmployeeCheckout(employee.id)
-                                    }
-                                    className="h-8 w-8"
-                                  >
-                                    <LogOut className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Marcar Salida</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                  {autoStaff.length > 0 ? (
+                    renderStaffTable(autoStaff)
                   ) : (
                     <div className="p-4 text-center text-muted-foreground text-sm">
                       No hay empleados en la oficina.
