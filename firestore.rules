@@ -1,139 +1,244 @@
 /**
- * @fileOverview Firestore Security Rules for Clockwork application.
+ * @fileoverview Firestore Security Rules for Clockwork Application
  *
  * Core Philosophy:
- * This ruleset provides complete access to any authenticated user for all data within the application.
- * This is suitable for prototyping, but NOT for production.
+ * This ruleset prioritizes a secure and maintainable data model. It emphasizes clear authorization logic,
+ * separation of concerns, and efficient data access patterns. Authorization decisions are based on verified
+ * user identity (`request.auth.uid`) and denormalized data within documents to minimize costly `get()` calls.
  *
  * Data Structure:
- * The Firestore database contains collections for users, attendance records, terminals, incident types,
- * employees, visit registrations, favorite visitors, current users (usuaris_dins),
- * employee directory (directori), and departments (departaments).
+ * - /users/{userId}: Stores user profiles with denormalized roles for authorization independence.
+ * - /attendance_records/{attendanceRecordId}: Stores attendance records, linked to employees and terminals.
+ * - /terminals/{terminalId}: Stores terminal information.
+ * - /incident_types/{incidentTypeId}: Stores incident types.
+ * - /employees/{employeeId}: Stores employee information.
+ * - /visit_registrations/{visitRegistrationId}: Stores visit registration data.
+ * - /favorite_visitors/{favoriteVisitorId}: Stores data about favorite visitors.
+ * - /usuaris_dins/{usuariId}: Stores a real-time list of users currently in the office (whiteboard).
+ * - /directori/{directoriId}: Stores employee directory information.
+ * - /departaments/{departamentId}: Stores the list of unique department names.
  *
  * Key Security Decisions:
- * - All authenticated users have read and write access to all collections.
- * - No validation is enforced on data shapes to allow for rapid prototyping.
+ * - Strict user-ownership model for user profiles (/users/{userId}).
+ * - The 'usuaris_dins' collection is publicly readable for authenticated users, but only writable by a trusted server.
+ * - Listing of the 'directori' collection is public, for general access to the directory.
+ * - The 'departaments' collection is publicly readable to allow all clients to see available departments without authentication.
+ * - All write operations require authentication (`isSignedIn()`).
+ * - No complex data validation is performed in this prototyping phase, except for authorization-critical fields.
+ * - Denormalization is used to avoid complex queries and improve performance. For example, user roles are stored in the 'users' document itself.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Grants complete read and write access to any authenticated user for user profiles.
-     * @path /users/{userId}
-     * @allow (create, update, delete, get, list) - Any authenticated user can create, update, delete, get, and list user profiles.
-     * @deny (none) - There are no restrictions for authenticated users.
-     * @principle Allows any authenticated user to manage user profiles.
-     */
-    match /users/{userId} {
-      allow read, write: if isSignedIn();
-    }
-
-    /**
-     * @description Grants complete read and write access to any authenticated user for attendance records.
-     * @path /attendance_records/{attendanceRecordId}
-     * @allow (create, update, delete, get, list) - Any authenticated user can create, update, delete, get, and list attendance records.
-     * @deny (none) - There are no restrictions for authenticated users.
-     * @principle Allows any authenticated user to manage attendance records.
-     */
-    match /attendance_records/{attendanceRecordId} {
-      allow read, write: if isSignedIn();
-    }
-
-    /**
-     * @description Grants complete read and write access to any authenticated user for terminals.
-     * @path /terminals/{terminalId}
-     * @allow (create, update, delete, get, list) - Any authenticated user can create, update, delete, get, and list terminals.
-     * @deny (none) - There are no restrictions for authenticated users.
-     * @principle Allows any authenticated user to manage terminals.
-     */
-    match /terminals/{terminalId} {
-      allow read, write: if isSignedIn();
-    }
-
-    /**
-     * @description Grants complete read and write access to any authenticated user for incident types.
-     * @path /incident_types/{incidentTypeId}
-     * @allow (create, update, delete, get, list) - Any authenticated user can create, update, delete, get, and list incident types.
-     * @deny (none) - There are no restrictions for authenticated users.
-     * @principle Allows any authenticated user to manage incident types.
-     */
-    match /incident_types/{incidentTypeId} {
-      allow read, write: if isSignedIn();
-    }
-
-    /**
-     * @description Grants complete read and write access to any authenticated user for employees.
-     * @path /employees/{employeeId}
-     * @allow (create, update, delete, get, list) - Any authenticated user can create, update, delete, get, and list employees.
-     * @deny (none) - There are no restrictions for authenticated users.
-     * @principle Allows any authenticated user to manage employees.
-     */
-    match /employees/{employeeId} {
-      allow read, write: if isSignedIn();
-    }
-
-    /**
-     * @description Grants complete read and write access to any authenticated user for visit registrations.
-     * @path /visit_registrations/{visitRegistrationId}
-     * @allow (create, update, delete, get, list) - Any authenticated user can create, update, delete, get, and list visit registrations.
-     * @deny (none) - There are no restrictions for authenticated users.
-     * @principle Allows any authenticated user to manage visit registrations.
-     */
-    match /visit_registrations/{visitRegistrationId} {
-      allow read, write: if isSignedIn();
-    }
-
-    /**
-     * @description Grants complete read and write access to any authenticated user for favorite visitors.
-     * @path /favorite_visitors/{favoriteVisitorId}
-     * @allow (create, update, delete, get, list) - Any authenticated user can create, update, delete, get, and list favorite visitors.
-     * @deny (none) - There are no restrictions for authenticated users.
-     * @principle Allows any authenticated user to manage favorite visitors.
-     */
-    match /favorite_visitors/{favoriteVisitorId} {
-      allow read, write: if isSignedIn();
-    }
-
-    /**
-     * @description Grants complete read and write access to any authenticated user for current users (usuaris_dins).
-     * @path /usuaris_dins/{usuariId}
-     * @allow (create, update, delete, get, list) - Any authenticated user can create, update, delete, get, and list current users.
-     * @deny (none) - There are no restrictions for authenticated users.
-     * @principle Allows any authenticated user to manage current users.
-     */
-    match /usuaris_dins/{usuariId} {
-      allow read, write: if isSignedIn();
-    }
-
-    /**
-     * @description Grants complete read and write access to any authenticated user for employee directory (directori).
-     * @path /directori/{directoriId}
-     * @allow (create, update, delete, get, list) - Any authenticated user can create, update, delete, get, and list employee directory entries.
-     * @deny (none) - There are no restrictions for authenticated users.
-     * @principle Allows any authenticated user to manage employee directory entries.
-     */
-    match /directori/{directoriId} {
-      allow read, write: if isSignedIn();
-    }
-
-    /**
-     * @description Grants complete read and write access to any authenticated user for departments (departaments).
-     * @path /departaments/{departamentId}
-     * @allow (create, update, delete, get, list) - Any authenticated user can create, update, delete, get, and list departments.
-     * @deny (none) - There are no restrictions for authenticated users.
-     * @principle Allows any authenticated user to manage departments.
-     */
-    match /departaments/{departamentId} {
-      allow read, write: if isSignedIn();
-    }
-
-    /**
-     * @description Checks if the user is signed in.
-     * @returns {boolean} True if the user is authenticated, false otherwise.
+     * @description Checks if the request is made by a signed-in user.
+     * @path N/A (Helper Function)
+     * @allow N/A (Helper Function)
+     * @deny N/A (Helper Function)
+     * @principle Ensures only authenticated users can access protected resources.
      */
     function isSignedIn() {
       return request.auth != null;
+    }
+
+    /**
+     * @description Checks if the authenticated user ID matches the provided user ID.
+     * @path N/A (Helper Function)
+     * @allow N/A (Helper Function)
+     * @deny N/A (Helper Function)
+     * @principle Enforces document ownership based on user ID.
+     */
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    /**
+     * @description Checks if the authenticated user is the owner of an existing document.
+     * @path N/A (Helper Function)
+     * @allow N/A (Helper Function)
+     * @deny N/A (Helper Function)
+     * @principle Combines ownership and existence checks for safe destructive operations.
+     */
+    function isExistingOwner(userId) {
+        return isOwner(userId) && resource != null;
+    }
+
+    /**
+     * @description Rules for user profiles.
+     * @path /users/{userId}
+     * @allow (create) If the authenticated user ID matches the requested user ID.
+     * @allow (get, update, delete) If the authenticated user ID matches the requested user ID.
+     * @deny (create) If the authenticated user ID does not match the requested user ID.
+     * @deny (get, update, delete) If the authenticated user ID does not match the requested user ID.
+     * @principle Enforces strict user-ownership for profile data.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false; // Prevent listing of all user profiles
+
+      allow create: if isOwner(userId);
+      allow update: if isExistingOwner(userId);
+      allow delete: if isExistingOwner(userId);
+    }
+
+    /**
+     * @description Rules for attendance records.
+     * @path /attendance_records/{attendanceRecordId}
+     * @allow (create) If the user is authenticated.
+     * @allow (get, list, update, delete) If the user is authenticated.
+     * @deny (create) If the user is not authenticated.
+     * @deny (get, list, update, delete) If the user is not authenticated.
+     * @principle Requires authentication for all attendance record operations.
+     */
+    match /attendance_records/{attendanceRecordId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && resource != null;
+      allow delete: if isSignedIn() && resource != null;
+    }
+
+    /**
+     * @description Rules for terminals.
+     * @path /terminals/{terminalId}
+     * @allow (create) If the user is authenticated.
+     * @allow (get, list, update, delete) If the user is authenticated.
+     * @deny (create) If the user is not authenticated.
+     * @deny (get, list, update, delete) If the user is not authenticated.
+     * @principle Requires authentication for all terminal operations.
+     */
+    match /terminals/{terminalId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && resource != null;
+      allow delete: if isSignedIn() && resource != null;
+    }
+
+    /**
+     * @description Rules for incident types.
+     * @path /incident_types/{incidentTypeId}
+     * @allow (create) If the user is authenticated.
+     * @allow (get, list, update, delete) If the user is authenticated.
+     * @deny (create) If the user is not authenticated.
+     * @deny (get, list, update, delete) If the user is not authenticated.
+     * @principle Requires authentication for all incident type operations.
+     */
+    match /incident_types/{incidentTypeId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && resource != null;
+      allow delete: if isSignedIn() && resource != null;
+    }
+
+    /**
+     * @description Rules for employees.
+     * @path /employees/{employeeId}
+     * @allow (create) If the user is authenticated.
+     * @allow (get, list, update, delete) If the user is authenticated.
+     * @deny (create) If the user is not authenticated.
+     * @deny (get, list, update, delete) If the user is not authenticated.
+     * @principle Requires authentication for all employee operations.
+     */
+    match /employees/{employeeId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && resource != null;
+      allow delete: if isSignedIn() && resource != null;
+    }
+
+    /**
+     * @description Rules for visit registrations.
+     * @path /visit_registrations/{visitRegistrationId}
+     * @allow (create) If the user is authenticated.
+     * @allow (get, list, update, delete) If the user is authenticated.
+     * @deny (create) If the user is not authenticated.
+     * @deny (get, list, update, delete) If the user is not authenticated.
+     * @principle Requires authentication for all visit registration operations.
+     */
+    match /visit_registrations/{visitRegistrationId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && resource != null;
+      allow delete: if isSignedIn() && resource != null;
+    }
+
+    /**
+     * @description Rules for favorite visitors.
+     * @path /favorite_visitors/{favoriteVisitorId}
+     * @allow (create) If the user is authenticated.
+     * @allow (get, list, update, delete) If the user is authenticated.
+     * @deny (create) If the user is not authenticated.
+     * @deny (get, list, update, delete) If the user is not authenticated.
+     * @principle Requires authentication for all favorite visitor operations.
+     */
+    match /favorite_visitors/{favoriteVisitorId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && resource != null;
+      allow delete: if isSignedIn() && resource != null;
+    }
+
+    /**
+     * @description Rules for users inside the office (whiteboard).
+     * @path /usuaris_dins/{usuariId}
+     * @allow (get, list) If the user is authenticated.
+     * @allow (create, update, delete) If false (only a trusted server can modify this data).
+     * @deny (get, list) If the user is not authenticated.
+     * @principle Allows public read access for authenticated users, but restricts write access to a trusted server.
+     */
+    match /usuaris_dins/{usuariId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    /**
+     * @description Rules for the employee directory.
+     * @path /directori/{directoriId}
+     * @allow (get, list) If true (publicly readable).
+     * @allow (create, update, delete) If the user is authenticated.
+     * @deny (create, update, delete) If the user is not authenticated.
+     * @principle Allows public read access, but restricts write access to authenticated users.
+     */
+    match /directori/{directoriId} {
+      allow get: if true;
+      allow list: if true;
+
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && resource != null;
+      allow delete: if isSignedIn() && resource != null;
+    }
+
+    /**
+     * @description Rules for departments.
+     * @path /departaments/{departamentId}
+     * @allow (get, list) If true (publicly readable).
+     * @allow (create, update, delete) If the user is authenticated.
+     * @deny (create, update, delete) If the user is not authenticated.
+     * @principle Allows public read access, but restricts write access to authenticated users.
+     */
+    match /departaments/{departamentId} {
+      allow get: if true;
+      allow list: if true;
+
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && resource != null;
+      allow delete: if isSignedIn() && resource != null;
     }
   }
 }
