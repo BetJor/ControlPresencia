@@ -3,15 +3,24 @@ import * as functions from 'firebase-functions';
 import { google } from 'googleapis';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
-import { onCall } from "firebase-functions/v2/https";
+import { onCall, HttpsOptions } from "firebase-functions/v2/https";
 import fetch from "node-fetch";
 
 initializeApp();
 
+const runtimeOptions: functions.RuntimeOptions = {
+    timeoutSeconds: 540,
+    memory: '1GB',
+    secrets: ["APPSHEET_APP_ACCESS_KEY"]
+};
+
+const region = 'europe-west1';
+
 exports.importarUsuarisAGoogleWorkspace = functions
-  .region('europe-west1')
-  .runWith({ timeoutSeconds: 540, memory: '1GB' })
+  .region(region)
+  .runWith(runtimeOptions)
   .pubsub.schedule('every 24 hours')
+  .timeZone('Europe/Madrid')
   .onRun(async (context) => {
     console.log(
       "Iniciant la importació d'usuaris de Google Workspace a Firestore."
@@ -155,10 +164,16 @@ exports.importarUsuarisAGoogleWorkspace = functions
     }
   });
 
+const httpsOptions: HttpsOptions = {
+    region,
+    memory: "1GiB",
+    timeoutSeconds: 60,
+    secrets: ["APPSHEET_APP_ACCESS_KEY"]
+};
 
-exports.getDadesAppSheet = onCall({ region: "europe-west1", memory: "1GiB", timeoutSeconds: 60 }, async (request) => {
+exports.getDadesAppSheet = onCall(httpsOptions, async (request) => {
   const APP_ID = "94c06d4b-4ed0-49d4-85a9-003710c7038b";
-  const APP_ACCESS_KEY = "V2-LINid-jygnH-4Eqx6-xEe13-kXpTW-ZALoX-yY7yc-q9EMj"; 
+  const APP_ACCESS_KEY = process.env.APPSHEET_APP_ACCESS_KEY; 
 
   const url = `https://api.appsheet.com/api/v2/apps/${APP_ID}/tables/dbo.Google_EntradasSalidas/Action`;
 
@@ -172,7 +187,7 @@ exports.getDadesAppSheet = onCall({ region: "europe-west1", memory: "1GiB", time
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'ApplicationAccessKey': APP_ACCESS_KEY
+      'ApplicationAccessKey': APP_ACCESS_KEY!
     },
     body: body
   });
@@ -189,14 +204,15 @@ exports.getDadesAppSheet = onCall({ region: "europe-west1", memory: "1GiB", time
 
 
 exports.sincronitzarPersonalPresent = functions
-  .region('europe-west1')
+  .region(region)
+  .runWith(runtimeOptions)
   .pubsub.schedule('every 5 minutes')
   .timeZone('Europe/Madrid')
   .onRun(async (context) => {
     console.log("TRACE: Iniciant la sincronització de personal present.");
 
     const APP_ID = "94c06d4b-4ed0-49d4-85a9-003710c7038b";
-    const APP_ACCESS_KEY = "V2-LINid-jygnH-4Eqx6-xEe13-kXpTW-ZALoX-yY7yc-q9EMj";
+    const APP_ACCESS_KEY = process.env.APPSHEET_APP_ACCESS_KEY;
     const db = getFirestore();
 
     try {
@@ -206,7 +222,7 @@ exports.sincronitzarPersonalPresent = functions
 
       const response = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'ApplicationAccessKey': APP_ACCESS_KEY },
+        headers: { 'Content-Type': 'application/json', 'ApplicationAccessKey': APP_ACCESS_KEY! },
         body: body
       });
 
@@ -226,7 +242,7 @@ exports.sincronitzarPersonalPresent = functions
       for (const fitxatge of fitxatges) {
         const terminalId = String(fitxatge['Terminal']).trim();
         if (!terminalsValids.includes(terminalId)) {
-          console.log(`TRACE: Fitxatge ignorat per terminal invàlid: ${JSON.stringify(fitxatge)}`);
+          // console.log(`TRACE: Fitxatge ignorat per terminal invàlid: ${JSON.stringify(fitxatge)}`);
           continue; 
         }
 
@@ -234,46 +250,50 @@ exports.sincronitzarPersonalPresent = functions
         let employeeId = fitxatge.Identificador;
 
         if (!dateStr || typeof dateStr !== 'string' || employeeId === null || employeeId === undefined) {
-          console.log(`TRACE: Fitxatge ignorat per dades invàlides: ${JSON.stringify(fitxatge)}`);
+          // console.log(`TRACE: Fitxatge ignorat per dades invàlides: ${JSON.stringify(fitxatge)}`);
           continue;
         }
         
         employeeId = String(employeeId).trim();
         if (employeeId.length === 0) {
-          console.log(`TRACE: Fitxatge ignorat per Identificador buit: ${JSON.stringify(fitxatge)}`);
+          // console.log(`TRACE: Fitxatge ignorat per Identificador buit: ${JSON.stringify(fitxatge)}`);
           continue;
         }
 
-        const parts = dateStr.split(/[\s/:]+/);
-        if(parts.length < 6) {
-          console.log(`TRACE: Fitxatge ignorat per format de data invàlid: ${dateStr}`);
-          continue;
-        }
-        
-        const year = parts[2];
-        const month = parts[0].padStart(2, '0');
-        const day = parts[1].padStart(2, '0');
-        const hours = parts[3].padStart(2, '0');
-        const minutes = parts[4].padStart(2, '0');
-        const seconds = parts[5].padStart(2, '0');
+        // Format: MM/DD/YYYY HH:MM:SS or M/D/YYYY H:M:S
+        const dateTimeParts = dateStr.split(' ');
+        const dateParts = dateTimeParts[0].split('/');
+        const timeParts = dateTimeParts[1].split(':');
 
-        const isoDateString = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
-        const date = new Date(isoDateString);
-        
-        if (isNaN(date.getTime())) {
-            console.log(`TRACE: Fitxatge ignorat per data invàlida després de parsejar: ${isoDateString}`);
+        if (dateParts.length < 3 || timeParts.length < 2) {
+            console.log(`TRACE: Fitxatge ignorat per format de data/hora invàlid: ${dateStr}`);
             continue;
         }
 
+        const month = parseInt(dateParts[0], 10) - 1; // Month is 0-indexed in JS
+        const day = parseInt(dateParts[1], 10);
+        const year = parseInt(dateParts[2], 10);
+        const hours = parseInt(timeParts[0], 10);
+        const minutes = parseInt(timeParts[1], 10);
+        const seconds = timeParts.length > 2 ? parseInt(timeParts[2], 10) : 0;
+        
+        // This creates a date using the local timezone of the function runner, which we've set to 'Europe/Madrid'
+        const date = new Date(year, month, day, hours, minutes, seconds);
+
+        if (isNaN(date.getTime())) {
+            console.log(`TRACE: Fitxatge ignorat per data invàlida després de parsejar: ${dateStr}`);
+            continue;
+        }
+        
         if (date >= today) {
           if (!userPunches[employeeId]) {
             userPunches[employeeId] = [];
-            console.log(`TRACE: Nou usuari detectat avui: ${employeeId}`);
+            // console.log(`TRACE: Nou usuari detectat avui: ${employeeId}`);
           }
           userPunches[employeeId].push({ ...fitxatge, parsedDate: date });
-          console.log(`TRACE: Fitxatge afegit per a l'usuari ${employeeId} a les ${date}`);
+          // console.log(`TRACE: Fitxatge afegit per a l'usuari ${employeeId} a les ${date}`);
         } else {
-            console.log(`TRACE: Fitxatge ignorat per ser d'un dia anterior: ${date}`);
+            // console.log(`TRACE: Fitxatge ignorat per ser d'un dia anterior: ${date}`);
         }
       }
 
@@ -288,11 +308,11 @@ exports.sincronitzarPersonalPresent = functions
             nomOriginal: lastPunch.Nombre || '',
             cognomsOriginal: lastPunch.Apellidos || '',
             nombreMoviments: punches.length,
-            darrerTerminal: lastPunch['Terminal'] || '',
+            darrerTerminal: String(lastPunch['Terminal'] || '').trim(),
           };
-          console.log(`TRACE: Usuari ${employeeId} marcat com a present.`);
+          // console.log(`TRACE: Usuari ${employeeId} marcat com a present.`);
         } else {
-            console.log(`TRACE: Usuari ${employeeId} té un nombre parell de fitxatges (${punches.length}), no es considera present.`);
+            // console.log(`TRACE: Usuari ${employeeId} té un nombre parell de fitxatges (${punches.length}), no es considera present.`);
         }
       }
 

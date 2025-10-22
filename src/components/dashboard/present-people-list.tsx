@@ -118,7 +118,7 @@ export default function PresentPeopleList() {
 
   const getFormattedTime = (timestamp: any) => {
     if (timestamp && typeof timestamp.toDate === 'function') {
-      return timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return timestamp.toDate().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
     }
     return 'N/A';
   };
@@ -126,7 +126,7 @@ export default function PresentPeopleList() {
   const getFormattedDateTime = (timestamp: any) => {
     if (timestamp && typeof timestamp.toDate === 'function') {
         const date = timestamp.toDate();
-        return date.toLocaleDateString([], { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return date.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
     }
     return 'N/A';
   };
