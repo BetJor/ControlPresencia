@@ -1,3 +1,4 @@
+
 'use client';
 import * as React from "react"
 import { Button } from '@/components/ui/button';
@@ -19,11 +20,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { Card, CardTitle } from "@/components/ui/card";
-import { useFirestore, useUser, addDocumentNonBlocking, setDocumentNonBlocking, useCollection, useMemoFirebase } from "@/firebase";
-import { collection, serverTimestamp, doc, query, where, getDocs, orderBy, limit } from "firebase/firestore";
+import { useFirestore, useUser, addDocumentNonBlocking, setDocumentNonBlocking, useCollection, useMemoFirebase, useFirebaseApp } from "@/firebase";
+import { collection, serverTimestamp, doc } from "firebase/firestore";
 import { Loader2 } from "lucide-react";
 import type { Directori } from "@/lib/types";
 import { useDebounce } from "@/hooks/use-debounce";
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 type FavoriteVisitor = {
     id: string;
@@ -43,6 +45,7 @@ export default function PunchClock() {
   const [isFavorite, setIsFavorite] = React.useState(false);
 
   const firestore = useFirestore();
+  const app = useFirebaseApp();
   const { user, isUserLoading } = useUser();
 
   const [searchedEmployees, setSearchedEmployees] = React.useState<Directori[]>([]);
@@ -70,38 +73,17 @@ export default function PunchClock() {
 
   React.useEffect(() => {
     const searchEmployees = async () => {
-        if (debouncedSearchTerm.length < 3 || !firestore) {
+        if (debouncedSearchTerm.length < 3 || !app) {
             setSearchedEmployees([]);
             return;
         }
 
         setIsSearching(true);
         try {
-            const searchTermLower = debouncedSearchTerm.toLowerCase();
-            const nomQuery = query(
-              collection(firestore, 'directori'),
-              where('nom', '>=', searchTermLower),
-              where('nom', '<=', searchTermLower + '\uf8ff'),
-              limit(10)
-            );
-            const cognomQuery = query(
-              collection(firestore, 'directori'),
-              where('cognom', '>=', searchTermLower),
-              where('cognom', '<=', searchTermLower + '\uf8ff'),
-              limit(10)
-            );
-
-            const [nomSnapshot, cognomSnapshot] = await Promise.all([
-                getDocs(nomQuery),
-                getDocs(cognomQuery)
-            ]);
-
-            const employeesMap = new Map<string, Directori>();
-            nomSnapshot.docs.forEach(doc => employeesMap.set(doc.id, { ...doc.data(), id: doc.id } as Directori));
-            cognomSnapshot.docs.forEach(doc => employeesMap.set(doc.id, { ...doc.data(), id: doc.id } as Directori));
-            
-            setSearchedEmployees(Array.from(employeesMap.values()));
-
+            const functions = getFunctions(app, 'europe-west1');
+            const searchEmployeesFn = httpsCallable(functions, 'searchEmployees');
+            const result = await searchEmployeesFn({ searchTerm: debouncedSearchTerm });
+            setSearchedEmployees(result.data as Directori[]);
         } catch (error) {
             console.error("Error searching employees:", error);
             toast({
@@ -115,7 +97,7 @@ export default function PunchClock() {
     };
 
     searchEmployees();
-  }, [debouncedSearchTerm, firestore, toast]);
+  }, [debouncedSearchTerm, app, toast]);
 
 
   const handleManualPunch = () => {
@@ -249,7 +231,7 @@ export default function PunchClock() {
                                         >
                                             {selectedEmployeeDisplay 
                                                 ? `${selectedEmployeeDisplay.cognom}, ${selectedEmployeeDisplay.nom}`
-                                                : "El filtre que poso aqui no em retorna empleats"
+                                                : "Buscar empleado..."
                                             }
                                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                         </Button>
@@ -268,7 +250,7 @@ export default function PunchClock() {
                                             <CommandList>
                                                 {isSearching && <CommandEmpty>Buscando...</CommandEmpty>}
                                                 {!isSearching && debouncedSearchTerm.length < 3 && <CommandEmpty>Escribe 3 o más letras para buscar.</CommandEmpty>}
-                                                {!isSearching && searchedEmployees.length === 0 && debouncedSearchTerm.length >= 3 && <CommandEmpty>No em retorna res</CommandEmpty>}
+                                                {!isSearching && searchedEmployees.length === 0 && debouncedSearchTerm.length >= 3 && <CommandEmpty>No se encontraron empleados.</CommandEmpty>}
                                                 
                                                 <CommandGroup>
                                                 {searchedEmployees.map((employee: Directori) => (

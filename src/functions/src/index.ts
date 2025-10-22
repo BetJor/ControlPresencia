@@ -15,6 +15,49 @@ const runtimeOptions: functions.RuntimeOptions = {
 
 const region = 'europe-west1';
 
+const httpsOptions: HttpsOptions = {
+    region,
+    memory: "1GiB",
+    timeoutSeconds: 60
+};
+
+exports.searchEmployees = onCall(httpsOptions, async (request) => {
+    const searchTerm = request.data.searchTerm;
+    if (!searchTerm || typeof searchTerm !== 'string' || searchTerm.length < 3) {
+        throw new functions.https.HttpsError('invalid-argument', 'El terme de cerca ha de tenir almenys 3 caràcters.');
+    }
+
+    const db = getFirestore();
+    const searchTermLower = searchTerm.toLowerCase();
+
+    try {
+        const directoriRef = db.collection('directori');
+        
+        // Firestore doesn't support native case-insensitive searches or OR queries on different fields easily.
+        // We fetch all and filter in memory. This is not ideal for very large datasets, but acceptable for a few thousand records.
+        const snapshot = await directoriRef.get();
+        
+        const employees: any[] = [];
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            const nom = data.nom ? data.nom.toLowerCase() : '';
+            const cognom = data.cognom ? data.cognom.toLowerCase() : '';
+
+            if (nom.includes(searchTermLower) || cognom.includes(searchTermLower)) {
+                employees.push({ ...data, id: doc.id });
+            }
+        });
+        
+        // Limit results to avoid sending too much data
+        return employees.slice(0, 20);
+
+    } catch (error) {
+        console.error("Error a la funció searchEmployees:", error);
+        throw new functions.https.HttpsError('internal', 'No s\'han pogut buscar els empleats.');
+    }
+});
+
+
 exports.importarUsuarisAGooleWorkspace = functions
   .region(region)
   .runWith(runtimeOptions)
@@ -162,12 +205,6 @@ exports.importarUsuarisAGooleWorkspace = functions
       return null;
     }
   });
-
-const httpsOptions: HttpsOptions = {
-    region,
-    memory: "1GiB",
-    timeoutSeconds: 60
-};
 
 exports.getDadesAppSheet = onCall(httpsOptions, async (request) => {
   const APP_ID = "94c06d4b-4ed0-49d4-85a9-003710c7038b";
