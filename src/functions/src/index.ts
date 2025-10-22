@@ -22,19 +22,18 @@ const httpsOptions: HttpsOptions = {
 };
 
 exports.searchEmployees = onCall(httpsOptions, async (request) => {
-    const searchTerm = request.data.searchTerm;
-    if (!searchTerm || typeof searchTerm !== 'string' || searchTerm.length < 3) {
-        throw new functions.https.HttpsError('invalid-argument', 'El terme de cerca ha de tenir almenys 3 caràcters.');
+    const searchTerm = request.data.searchTerm as string;
+    const department = request.data.department as string;
+
+    if (!searchTerm && !department) {
+        throw new functions.https.HttpsError('invalid-argument', 'El terme de cerca o el departament són necessaris.');
     }
 
     const db = getFirestore();
-    const searchTermLower = searchTerm.toLowerCase();
+    const searchTermLower = searchTerm ? searchTerm.toLowerCase() : '';
 
     try {
         const directoriRef = db.collection('directori');
-        
-        // Firestore doesn't support native case-insensitive searches or OR queries on different fields easily.
-        // We fetch all and filter in memory. This is not ideal for very large datasets, but acceptable for a few thousand records.
         const snapshot = await directoriRef.get();
         
         const employees: any[] = [];
@@ -42,14 +41,17 @@ exports.searchEmployees = onCall(httpsOptions, async (request) => {
             const data = doc.data();
             const nom = data.nom ? data.nom.toLowerCase() : '';
             const cognom = data.cognom ? data.cognom.toLowerCase() : '';
+            const dep = data.departament || '';
 
-            if (nom.includes(searchTermLower) || cognom.includes(searchTermLower)) {
+            const nameMatch = searchTerm ? (nom.includes(searchTermLower) || cognom.includes(searchTermLower)) : true;
+            const departmentMatch = department ? dep === department : true;
+
+            if (nameMatch && departmentMatch) {
                 employees.push({ ...data, id: doc.id });
             }
         });
         
-        // Limit results to avoid sending too much data
-        return employees.slice(0, 20);
+        return employees.slice(0, 50); // Limitar resultados
 
     } catch (error) {
         console.error("Error a la funció searchEmployees:", error);
@@ -408,3 +410,4 @@ exports.sincronitzarPersonalPresent = functions
       return null;
     }
   });
+

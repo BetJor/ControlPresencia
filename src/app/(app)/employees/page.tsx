@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useFirestore, useMemoFirebase } from "@/firebase";
-import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
+import { useFirebaseApp, useFirestore, useMemoFirebase } from "@/firebase";
+import { collection, query, orderBy } from "firebase/firestore";
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Loader2, BookUser, Mail, Phone, Search, ChevronsUpDown, Check, XIcon, ArrowUp, ArrowDown } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +28,7 @@ type Department = {
 
 export default function DirectoryPage() {
     const firestore = useFirestore();
+    const app = useFirebaseApp();
     const { toast } = useToast();
     const [nameFilter, setNameFilter] = useState('');
     const [departmentFilter, setDepartmentFilter] = useState('');
@@ -61,7 +63,7 @@ export default function DirectoryPage() {
     };
     
     const performSearch = async () => {
-        if (!firestore) return;
+        if (!app) return;
 
         const searchTerm = nameFilter.trim();
         
@@ -81,56 +83,14 @@ export default function DirectoryPage() {
         setEmployees([]);
 
         try {
-            // Firestore does not support case-insensitive search natively.
-            // A common strategy is to search for a range.
-            const searchTermLower = searchTerm.toLowerCase();
-            const searchTermUpper = searchTermLower + '\uf8ff';
-            
-            const nameQuery = query(
-              collection(firestore, 'directori'),
-              where('nom', '>=', searchTermLower),
-              where('nom', '<=', searchTermUpper)
-            );
-
-            const lastNameQuery = query(
-              collection(firestore, 'directori'),
-              where('cognom', '>=', searchTermLower),
-              where('cognom', '<=', searchTermUpper)
-            );
-            
-            const departmentQuery = departmentFilter ? query(
-                collection(firestore, 'directori'),
-                where('departament', '==', departmentFilter)
-            ) : null;
-
-            const queries = [];
-            if(searchTerm) {
-                queries.push(getDocs(nameQuery));
-                queries.push(getDocs(lastNameQuery));
-            }
-            if(departmentQuery) {
-                queries.push(getDocs(departmentQuery));
-            }
-
-            const snapshots = await Promise.all(queries);
-
-            const employeesMap = new Map<string, Directori>();
-
-            snapshots.forEach(snapshot => {
-                snapshot.forEach(doc => {
-                    employeesMap.set(doc.id, { ...doc.data(), id: doc.id } as Directori);
-                });
+            const functions = getFunctions(app, 'europe-west1');
+            const searchEmployeesFn = httpsCallable(functions, 'searchEmployees');
+            const result = await searchEmployeesFn({ 
+                searchTerm: searchTerm,
+                department: departmentFilter 
             });
             
-            let fetchedEmployees = Array.from(employeesMap.values());
-            
-            // If both filters are active, we need to do a client-side intersection
-            if(searchTerm && departmentFilter) {
-                fetchedEmployees = fetchedEmployees.filter(emp => 
-                    (emp.nom.toLowerCase().includes(searchTermLower) || emp.cognom.toLowerCase().includes(searchTermLower))
-                    && emp.departament === departmentFilter
-                );
-            }
+            const fetchedEmployees = result.data as Directori[];
 
             const sorted = fetchedEmployees.sort((a,b) => {
                 const aVal = a[sortConfig.key] || '';
