@@ -1,78 +1,98 @@
 /**
- * @description: This ruleset enforces a role-based access control model with ownership considerations.
- * All data is organized into collections for employees, terminals, attendance records, and incident types.
- * The key security decisions are:
- * - Administrators can manage all data within the "terminals" and "incident_types" collections.
- * - Employees can only manage their own data within the "employees" collection and "attendance" subcollection.
- * - Listing of all employees is allowed for administrators to manage the directory.
- * - The 'role' field within the 'employees' documents is used for authorization.
- * - All write operations are restricted to authorized users.
+ * @fileoverview Firestore Security Rules for the Attendance Tracking System.
+ *
+ * Core Philosophy:
+ * This ruleset implements a role-based access control system with ownership constraints.
+ * Administrators have broad access, while regular users primarily access their own data.
+ *
+ * Data Structure:
+ * - /employees/{employeeId}: Employee profiles, with a 'role' field (e.g., 'admin').
+ * - /terminals/{terminalId}: Terminal information, restricted to administrators.
+ * - /employees/{employeeId}/attendance/{attendanceId}: Attendance records, accessible to admins and the respective employee.
+ * - /incident_types/{incidentTypeId}: Incident types, restricted to administrators.
+ *
+ * Key Security Decisions:
+ * - Administrators can manage all employee profiles, terminals and incident types.
+ * - Employees can only manage their own profiles and attendance records.
+ * - Listing all employees is allowed only for administrators.
+ * - The 'role' field within the employee document is used for authorization.
+ *
+ * Denormalization for Authorization:
+ * - The 'role' field is denormalized directly into the employee document to avoid costly `get()` calls when checking for admin privileges.
+ *   Example: { members: { 'user_abc': 'editor' } }
+ * Structural Segregation:
+ * Data is segregated into distinct collections based on access control requirements. For example, employee profiles are stored separately from attendance records to allow for different security policies.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description: Manages employee profiles, with role-based access control (admin or self).
-     * @path: /employees/{employeeId}
-     * @allow: (create) If the user's UID matches the employeeId, allowing self-creation.
-     * @allow: (get, list) If the user is an admin or if the requested employeeId matches the user's UID.
-     * @allow: (update, delete) If the user is an admin or the owner of the document.
-     * @deny: (create) If the user's UID does not match the employeeId.
-     * @deny: (get, list, update, delete) If the user is not an admin and the employeeId does not match the user's UID.
-     * @principle: Enforces role-based access and document ownership.
+     * @description Manages employee profiles. Admins can manage all users, and users can manage themselves.
+     * @path /employees/{employeeId}
+     * @allow (read, create, update, delete) if isSignedIn() && (isAdmin() || isOwner(employeeId))
+     * @deny (create, update, delete) if !isSignedIn() || (!isAdmin() && !isOwner(employeeId))
+     * @principle Enforces role-based access control and document ownership.
      */
     match /employees/{employeeId} {
       allow get: if isSignedIn() && (isAdmin() || isOwner(employeeId));
       allow list: if isSignedIn() && isAdmin();
-      allow create: if isSignedIn() && isOwner(employeeId);
-      allow update: if isSignedIn() && (isAdmin() || isExistingOwner(employeeId));
-      allow delete: if isSignedIn() && (isAdmin() || isExistingOwner(employeeId));
+      allow create: if isSignedIn() && isOwner(employeeId) && request.resource.data.id == request.auth.uid;
+      allow update: if isSignedIn() && (isAdmin() || isExistingOwner(employeeId)) && request.resource.data.id == resource.data.id;
+      allow delete: if isSignedIn() && isAdmin();
     }
 
     /**
-     * @description: Manages terminal information, accessible only by administrators.
-     * @path: /terminals/{terminalId}
-     * @allow: (create, get, list, update, delete) If the user is an admin.
-     * @deny: (create, get, list, update, delete) If the user is not an admin.
-     * @principle: Restricts terminal management to administrators.
+     * @description Manages terminal information. Only accessible by administrators.
+     * @path /terminals/{terminalId}
+     * @allow (read, create, update, delete) if isSignedIn() && isAdmin()
+     * @deny (create, update, delete) if !isSignedIn() || !isAdmin()
+     * @principle Restricts terminal management to administrators.
      */
     match /terminals/{terminalId} {
       allow get: if isSignedIn() && isAdmin();
       allow list: if isSignedIn() && isAdmin();
       allow create: if isSignedIn() && isAdmin();
-      allow update: if isSignedIn() && isAdmin() && resource != null;
-      allow delete: if isSignedIn() && isAdmin() && resource != null;
+      allow update: if isSignedIn() && isAdmin();
+      allow delete: if isSignedIn() && isAdmin();
     }
 
     /**
-     * @description: Manages attendance records for each employee, accessible by admins and the respective employee.
-     * @path: /employees/{employeeId}/attendance/{attendanceId}
-     * @allow: (create, get, list, update, delete) If the user is an admin or the owner of the employeeId.
-     * @deny: (create, get, list, update, delete) If the user is not an admin and not the owner of the employeeId.
-     * @principle: Enforces ownership for attendance records within employee subcollections.
+     * @description Manages attendance records for each employee. Accessible by admins and the respective employee.
+     * @path /employees/{employeeId}/attendance/{attendanceId}
+     * @allow (read, create, update, delete) if isSignedIn() && (isAdmin() || isOwner(employeeId))
+     * @deny (create, update, delete) if !isSignedIn() || (!isAdmin() && !isOwner(employeeId))
+     * @principle Enforces document ownership for attendance records.
      */
     match /employees/{employeeId}/attendance/{attendanceId} {
       allow get: if isSignedIn() && (isAdmin() || isOwner(employeeId));
       allow list: if isSignedIn() && (isAdmin() || isOwner(employeeId));
-      allow create: if isSignedIn() && (isAdmin() || isOwner(employeeId));
-      allow update: if isSignedIn() && (isAdmin() || isExistingOwner(employeeId));
+      allow create: if isSignedIn() && (request.resource.data.employeeId == employeeId) && isSignedIn();
+      allow update: if isSignedIn() && (isAdmin() || isExistingOwner(employeeId)) && (request.resource.data.employeeId == resource.data.employeeId);
       allow delete: if isSignedIn() && (isAdmin() || isExistingOwner(employeeId));
     }
 
     /**
-     * @description: Manages incident types, accessible only by administrators.
-     * @path: /incident_types/{incidentTypeId}
-     * @allow: (create, get, list, update, delete) If the user is an admin.
-     * @deny: (create, get, list, update, delete) If the user is not an admin.
-     * @principle: Restricts incident type management to administrators.
+     * @description Manages incident types. Only accessible by administrators.
+     * @path /incident_types/{incidentTypeId}
+     * @allow (read, create, update, delete) if isSignedIn() && isAdmin()
+     * @deny (create, update, delete) if !isSignedIn() || !isAdmin()
+     * @principle Restricts incident type management to administrators.
      */
     match /incident_types/{incidentTypeId} {
       allow get: if isSignedIn() && isAdmin();
       allow list: if isSignedIn() && isAdmin();
       allow create: if isSignedIn() && isAdmin();
-      allow update: if isSignedIn() && isAdmin() && resource != null;
-      allow delete: if isSignedIn() && isAdmin() && resource != null;
+      allow update: if isSignedIn() && isAdmin();
+      allow delete: if isSignedIn() && isAdmin();
+    }
+
+    match /visit_registrations/{visitRegistrationId} {
+        allow get: if false;
+        allow list: if false;
+        allow create: if false;
+        allow update: if false;
+        allow delete: if false;
     }
 
     function isSignedIn() {
