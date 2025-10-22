@@ -57,7 +57,7 @@ export default function Header() {
               className="flex items-center gap-2 text-lg font-semibold"
             >
               <Clock className="h-6 w-6 text-primary" />
-              <span className="font-headline text-xl">Clockwork</span>
+              <span className="font-headline text-xl">Control de Presència</span>
             </Link>
             <Link href="/dashboard" className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground">
               <Home className="h-5 w-5" />
@@ -86,7 +86,7 @@ export default function Header() {
       <div className="flex items-center gap-2">
           <Link href="/dashboard" className="hidden items-center gap-2 text-lg font-semibold md:flex">
              <Clock className="h-6 w-6 text-primary" />
-             <span className="font-headline text-xl">Clockwork</span>
+             <span className="font-headline text-xl">Control de Presència</span>
           </Link>
       </div>
 

@@ -3,7 +3,7 @@ import AppSidebar from '@/components/shared/app-sidebar';
 import Header from '@/components/shared/header';
 
 export const metadata: Metadata = {
-  title: 'Panel de Clockwork',
+  title: 'Panel de Control de Presència',
   description: 'Seguimiento de Asistencia en Tiempo Real',
 };
 

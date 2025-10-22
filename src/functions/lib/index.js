@@ -223,25 +223,49 @@ exports.sincronitzarPersonalPresent = functions
         const userPunches = {};
         const terminalsValids = ['10', '11', '12', '13'];
         for (const fitxatge of fitxatges) {
-            const terminalId = String(fitxatge['Id Terminal']);
+            const terminalId = String(fitxatge['Terminal']).trim();
             if (!terminalsValids.includes(terminalId)) {
-                continue; // Ignora el fitxatge si no és d'una terminal vàlida
+                console.log(`TRACE: Fitxatge ignorat per terminal invàlid: ${JSON.stringify(fitxatge)}`);
+                continue;
             }
             const dateStr = fitxatge['Fecha y Hora'] || fitxatge['Data'];
             let employeeId = fitxatge.Identificador;
-            if (!dateStr || typeof dateStr !== 'string' || employeeId === null || employeeId === undefined)
+            if (!dateStr || typeof dateStr !== 'string' || employeeId === null || employeeId === undefined) {
+                console.log(`TRACE: Fitxatge ignorat per dades invàlides: ${JSON.stringify(fitxatge)}`);
                 continue;
+            }
             employeeId = String(employeeId).trim();
-            if (employeeId.length === 0)
+            if (employeeId.length === 0) {
+                console.log(`TRACE: Fitxatge ignorat per Identificador buit: ${JSON.stringify(fitxatge)}`);
                 continue;
+            }
             const parts = dateStr.split(/[\s/:]+/);
-            if (parts.length < 6)
+            if (parts.length < 6) {
+                console.log(`TRACE: Fitxatge ignorat per format de data invàlid: ${dateStr}`);
                 continue;
-            const date = new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]), parseInt(parts[3]), parseInt(parts[4]), parseInt(parts[5]));
+            }
+            const year = parts[2];
+            const month = parts[0].padStart(2, '0');
+            const day = parts[1].padStart(2, '0');
+            const hours = parts[3].padStart(2, '0');
+            const minutes = parts[4].padStart(2, '0');
+            const seconds = parts[5].padStart(2, '0');
+            const isoDateString = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+            const date = new Date(isoDateString);
+            if (isNaN(date.getTime())) {
+                console.log(`TRACE: Fitxatge ignorat per data invàlida després de parsejar: ${isoDateString}`);
+                continue;
+            }
             if (date >= today) {
-                if (!userPunches[employeeId])
+                if (!userPunches[employeeId]) {
                     userPunches[employeeId] = [];
+                    console.log(`TRACE: Nou usuari detectat avui: ${employeeId}`);
+                }
                 userPunches[employeeId].push(Object.assign(Object.assign({}, fitxatge), { parsedDate: date }));
+                console.log(`TRACE: Fitxatge afegit per a l'usuari ${employeeId} a les ${date}`);
+            }
+            else {
+                console.log(`TRACE: Fitxatge ignorat per ser d'un dia anterior: ${date}`);
             }
         }
         const presentUsers = {};
@@ -255,8 +279,12 @@ exports.sincronitzarPersonalPresent = functions
                     nomOriginal: lastPunch.Nombre || '',
                     cognomsOriginal: lastPunch.Apellidos || '',
                     nombreMoviments: punches.length,
-                    darrerTerminal: lastPunch['Id Terminal'] || '',
+                    darrerTerminal: lastPunch['Terminal'] || '',
                 };
+                console.log(`TRACE: Usuari ${employeeId} marcat com a present.`);
+            }
+            else {
+                console.log(`TRACE: Usuari ${employeeId} té un nombre parell de fitxatges (${punches.length}), no es considera present.`);
             }
         }
         const presentUserIds = Object.keys(presentUsers);

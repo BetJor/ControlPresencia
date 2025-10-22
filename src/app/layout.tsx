@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import { FirebaseClientProvider } from '@/firebase';
 
 export const metadata: Metadata = {
-  title: 'Clockwork',
+  title: 'Control de Presència',
   description: 'Seguimiento de Asistencia en Tiempo Real',
 };
 
